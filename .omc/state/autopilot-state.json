@@ -5,11 +5,18 @@
   "teamSize": 5,
   "reviewGate": ["architect", "code-reviewer", "security-reviewer", "advisor"],
   "constraints": ["free-tier-only", "no-mac-no-device", "web-first-verification"],
-  "currentPhase": "P2",
+  "currentPhase": "P4",
   "currentStage": "planning",
+  "phaseOrder": ["P1", "P2", "P4", "P3", "P5"],
+  "phaseOrderNote": "사용자 결정(2026-06-08): P3(GPS 네비)는 실기기 검증 불가 절벽 — 키+에뮬레이터 환경 후. P4(Valhalla)는 로컬 Docker로 실검증 가능하여 선행",
+  "carryForward": [
+    "P3 계획 게이트 필수: 실-모드 분기를 가진 모든 핸들러/서비스는 fetch 모킹 실-모드 테스트 필수 (데모 모드 테스트는 핸들러 커버리지로 불인정) — P1·P2 공통 결함 패턴",
+    "키 발급 후 검증 항목: 대중교통 환승 버퍼가 도보 leg 경계에서 과산정(LOW) — 실 ODsay 데이터로 알려진 경로 1건 총 소요시간 대조",
+    "P3 Foundation에서 워커 간 중복 유틸 통합 (parseDurationSec, decodePolyline, isIntercity, [lng,lat] mappers)"
+  ],
   "phases": {
     "P1": { "status": "done", "plan": ".omc/plans/autopilot-impl-p1.md", "approvedBy": ["architect", "code-reviewer", "security-reviewer", "advisor"], "finalCommit": "6e7fdad", "tests": 162 },
-    "P2": { "status": "planning", "plan": ".omc/plans/autopilot-impl-p2.md" },
+    "P2": { "status": "done", "plan": ".omc/plans/autopilot-impl-p2.md", "approvedBy": ["architect", "code-reviewer", "security-reviewer", "advisor"], "finalCommit": "11a173d", "tests": 401, "fixRounds": 1 },
     "P3": { "status": "pending" },
     "P4": { "status": "pending" },
     "P5": { "status": "pending" }
