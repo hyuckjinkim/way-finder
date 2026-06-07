@@ -20,13 +20,12 @@ services:
     mem_limit: 4g
     volumes:
       # WSL 네이티브 경로 권장 (.env의 VALHALLA_DATA로 override).
+      # build-tiles.sh가 /data 기준 경로로 valhalla.json을 생성하므로 동일하게 마운트.
       - "${VALHALLA_DATA:-~/valhalla-tiles}:/data"
-    # 서빙 전용: 빌드 스킵(build_tiles=False, build_admins/etc False), tar에서 서빙.
-    environment:
-      - use_tiles_ignore_pbf=True
-      - build_tar=False
-      - serve_tiles=True
-      - force_rebuild=False
+    # 이미지 기본 entrypoint는 /custom_files 관례를 기대해 /data 마운트와 어긋남
+    # (컨테이너 재시작 루프 원인). 빌드 시 생성된 config로 서비스 직접 실행.
+    entrypoint: ["valhalla_service"]
+    command: ["/data/valhalla.json", "1"]
     healthcheck:
       # /status 200 → 기동 완료 (§3 F3.6).
       test: ["CMD", "curl", "-f", "http://localhost:8002/status"]
