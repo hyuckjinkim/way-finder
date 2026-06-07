@@ -18,8 +18,14 @@ overrides:
 minimumReleaseAgeExclude:
   - '@cloudflare/workers-types@4.20260607.1'
 
-# wrangler dry-run/번들에 필요한 빌드 스크립트 허용.
+# 빌드 스크립트 정책 (pnpm 11 `allowBuilds` 맵: true=실행, false=건너뜀).
+#   esbuild/sharp/workerd: wrangler dry-run/번들 빌드 허용.
+#   msgpackr-extract(Expo metro msgpack 가속기, JS 폴백 있음) / return-fetch(@react-native-kakao/core,
+#   사실상 순수 JS): /mnt/d에서 node-gyp 네이티브 컴파일을 피하려 빌드 건너뜀. 이 명시적 결정이
+#   deps-status dirty 플래그를 해제해 `pnpm -r <script>`의 자동 install 재실행을 막는다(5워커 병렬 안전).
 allowBuilds:
   esbuild: true
   sharp: true
   workerd: true
+  msgpackr-extract: false
+  return-fetch: false

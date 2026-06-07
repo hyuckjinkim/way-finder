@@ -28,3 +28,26 @@
 
 > 주의: `overrides` (pnpm-workspace.yaml)는 트리에 아직 존재하지 않는 패키지(expo, maplibre 등)에는 무효(inert)하다.
 > 해당 스트림이 `pnpm add`로 추가할 때 overrides가 핀을 강제한다.
+
+## E1 (Expo 부트스트랩 + 전 스트림 일괄 설치)에서 추가된 핀
+
+> 추가 일자: 2026-06-07. 출처: Expo SDK 56의 `bundledNativeModules.json`(Expo 관리 피어) + `npm view <pkg> version`(비-Expo).
+> Expo 관리 패키지는 SDK가 보증하는 캐럿/틸드 범위를 그대로 따른다 (latest 임의 핀 금지 — SDK 호환 깨짐 방지).
+
+| 패키지 | 핀 | 출처 | 비고 |
+|--------|----|----|------|
+| `react-dom` | 19.2.7 | react와 정합 | 웹 export 필수(react-native-web 렌더 타깃) |
+| `@expo/metro-runtime` | ~56.0.14 | SDK 56 bundled | 웹 enable 런타임 |
+| `expo-constants` | ~56.0.17 | SDK 56 bundled | expo-router 피어 |
+| `expo-linking` | ~56.0.13 | SDK 56 bundled | expo-router 피어(딥링크) |
+| `expo-status-bar` | ~56.0.4 | SDK 56 bundled | App.tsx StatusBar |
+| `expo-location` | ~56.0.16 | SDK 56 bundled | 스트림 D(D3) 위치 |
+| `expo-router` | ~56.2.9 | SDK 56 bundled | 네비게이션(E2). E1은 설치만, classic index.js 엔트리 유지 |
+| `react-native-screens` | 4.25.2 | SDK 56 bundled | expo-router 피어 |
+| `react-native-safe-area-context` | ~5.7.0 | SDK 56 bundled | (npm latest 5.8.0 아님 — SDK 보증판) |
+| `react-native-gesture-handler` | ~2.31.1 | SDK 56 bundled | expo-router 피어 |
+| `react-native-reanimated` | 4.3.1 | SDK 56 bundled | expo-router 피어. **주의: WSL 웹 export 위협(C3) — E1 stub은 미import이므로 무관, E2/E3가 라우터 배선 후 export 재검증 필요** |
+| `zustand` | 5.0.14 | npm latest | 비-Expo 상태관리(D4) |
+| `@tanstack/react-query` | 5.101.0 | npm latest | 비-Expo 쿼리(D4) |
+| `@react-native-kakao/core` | 2.2.7 | map과 정합 | @react-native-kakao/map의 피어 |
+| `@babel/core` | ^7.25.0 | Expo 템플릿 표준 | metro/babel 빌드 devDep |
