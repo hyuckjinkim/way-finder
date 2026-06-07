@@ -41,7 +41,11 @@ export async function dispatchRoutes(
   }
 
   const mode = body.mode;
-  if (typeof mode !== 'string' || !(mode in modeHandlers)) {
+  // hasOwnProperty로 검사 — `in`은 'toString' 등 프로토타입 키를 통과시킨다.
+  if (
+    typeof mode !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(modeHandlers, mode)
+  ) {
     return c.json({ error: `unknown mode: ${String(mode)}` }, 400);
   }
 

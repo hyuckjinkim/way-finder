@@ -87,9 +87,11 @@ export const CAR_WAYPOINT: Route = buildRoute(
   0,
 );
 
-// ── 대중교통 leg-chaining A→B→C (지하철 + 환승도보 + 버스, 환승 2회) ──────────
-// 3 정거장 구간을 환승 버퍼 포함 여러 leg로 합성. transit leg 사이의 도보 leg가
-// 환승을 표현 — 환승 수 = 2 (지하철→도보, 도보→버스).
+// ── 대중교통 leg-chaining A→B→C (지하철 + 환승도보 + 버스) ────────────────────
+// 3 정거장 구간을 환승 버퍼 포함 여러 leg로 합성.
+// 환승 수 카운팅 규약(이 픽스처·B2 엔진 공통): 버퍼는 transit leg 사이의 도보
+// 환승 leg마다 1회 부과. 여기선 도보 환승 leg가 1개지만, 진입/이탈 보행을 포함한
+// 합성으로 환승 2회분 버퍼를 적용한다(목 — 실측 정밀도는 §7 한계).
 export const TRANSIT_CHAIN: Route = buildRoute(
   [
     {
