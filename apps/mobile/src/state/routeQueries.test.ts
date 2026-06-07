@@ -6,6 +6,8 @@
  *
  * 디바운스 훅(useDebounced)은 React 훅이므로 순수 로직 테스트 대신
  * vi.useFakeTimers()로 타이머 제어 후 단언한다.
+ *
+ * C2(P4): preference·maxExtraMinutes 캐시 키 포함 + 슬라이더 디바운스 추가 단언.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
@@ -15,7 +17,7 @@ import {
   scheduleDebounce,
 } from './routeQueries.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
-import type { LatLng, TravelMode } from '@wayfinder/shared';
+import type { LatLng, RoutePreference, TravelMode } from '@wayfinder/shared';
 
 const SEOUL_A: LatLng = { lat: 37.5563, lng: 126.9723 };
 const SEOUL_C: LatLng = { lat: 37.5665, lng: 126.978 };
@@ -178,5 +180,98 @@ describe('routeQueryOptions — queryFn', () => {
       const opts = routeQueryOptions([SEOUL_A, SEOUL_C], mode);
       expect(typeof opts.queryFn).toBe('function');
     }
+  });
+});
+
+// ─── C2(P4): preference·maxExtraMinutes 캐시 키 포함 ────────────────────────
+
+describe('routeQueryKeys — C2(P4) preference·maxExtraMinutes 포함', () => {
+  it('preference 미지정 시 기본값(fastest)으로 정규화', () => {
+    const k1 = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk');
+    const k2 = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', undefined);
+    expect(k1).toEqual(k2);
+  });
+
+  it('preference가 다르면 다른 키', () => {
+    const kFastest = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', 'fastest');
+    const kSafe = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', 'safe');
+    expect(kFastest).not.toEqual(kSafe);
+  });
+
+  it('maxExtraMinutes가 다르면 다른 키', () => {
+    const k10 = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', 'safe', 10);
+    const k20 = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', 'safe', 20);
+    expect(k10).not.toEqual(k20);
+  });
+
+  it('maxExtraMinutes 미지정과 undefined는 동일 키', () => {
+    const kUndef = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', 'safe', undefined);
+    const kOmit = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', 'safe');
+    expect(kUndef).toEqual(kOmit);
+  });
+
+  it('기존 key[0..2] 구조 불변 (하위호환)', () => {
+    const key = routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', 'safe', 10);
+    expect(key[0]).toBe('route');
+    expect(key[1]).toBe('walk');
+    expect(key[2]).toContain('37.5563');
+  });
+
+  it('모든 RoutePreference 값이 각각 다른 키 생성', () => {
+    const prefs: RoutePreference[] = ['fastest', 'walkable', 'safe', 'quiet', 'scenic'];
+    const keys = prefs.map((p) => routeQueryKeys.route([SEOUL_A, SEOUL_C], 'walk', p));
+    const unique = new Set(keys.map((k) => JSON.stringify(k)));
+    expect(unique.size).toBe(prefs.length);
+  });
+});
+
+describe('routeQueryOptions — C2(P4) preference·maxExtraMinutes queryFn 전달', () => {
+  it('preference·maxExtraMinutes가 queryKey에 반영된다', () => {
+    const opts = routeQueryOptions([SEOUL_A, SEOUL_C], 'walk', 'safe', 15);
+    const key = opts.queryKey as unknown[];
+    // key 구조: ['route', mode, stops, preference, maxExtraMinutes]
+    expect(key[3]).toBe('safe');
+    expect(key[4]).toBe(15);
+  });
+
+  it('preference 없이 호출해도 enabled 정상 (하위호환)', () => {
+    const opts = routeQueryOptions([SEOUL_A, SEOUL_C], 'walk');
+    expect(opts.enabled).toBe(true);
+  });
+});
+
+// ─── C2(P4): 슬라이더(maxExtraMinutes) 디바운스 — scheduleDebounce 재사용 ─────
+
+describe('scheduleDebounce — C2(P4) 슬라이더 N분 디바운스', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('슬라이더 연속 변경은 마지막 N분만 commit', () => {
+    vi.useFakeTimers();
+    const handle = createDebounceHandle();
+    let committed: number | undefined;
+    const commit = (v: number) => { committed = v; };
+
+    scheduleDebounce(handle, 5, ROUTE_DEBOUNCE_MS, commit);
+    scheduleDebounce(handle, 10, ROUTE_DEBOUNCE_MS, commit);
+    scheduleDebounce(handle, 15, ROUTE_DEBOUNCE_MS, commit);
+
+    expect(committed).toBeUndefined();
+    vi.advanceTimersByTime(ROUTE_DEBOUNCE_MS);
+    expect(committed).toBe(15);
+  });
+
+  it('디바운스 간격 전에는 N분 미commit', () => {
+    vi.useFakeTimers();
+    const handle = createDebounceHandle();
+    const commit = vi.fn();
+
+    scheduleDebounce(handle, 20, ROUTE_DEBOUNCE_MS, commit);
+    vi.advanceTimersByTime(ROUTE_DEBOUNCE_MS - 1);
+    expect(commit).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(commit).toHaveBeenCalledExactlyOnceWith(20);
   });
 });
