@@ -1,11 +1,12 @@
 /**
  * A2 — GET /v1/places/:id?provider=kakao|google
  *
- * 기본정보(카카오 or 구글) + lazy 구글 평점·리뷰 병합 + 블로그 스니펫 포함.
+ * 기본정보(카카오 or 구글) + 블로그 스니펫 포함.
+ * 구글 평점·리뷰는 포함하지 않는다 — lazy load (§11 과금 방어선). 구글 탭 활성화 시
+ * GET /v1/places/:id/google 으로 별도 조회한다.
  * id 형식: "kakao:12345" | "google:ChIJ..."
  *
  * graceful degradation:
- * - 구글 fetch 실패 → 200 + reviews:[] + rating 없음 + 에러 로깅
  * - 블로그 fetch 실패 → 200 + blogs:{naver:[], kakao:[]} + 에러 로깅
  */
 import type { Context } from 'hono';
@@ -16,20 +17,13 @@ import {
   normalizeKakaoPlaceDetail,
   type KakaoLocalDocument,
 } from '../normalize/kakaoPlace.js';
-import {
-  normalizeGoogleReview,
-  normalizeGoogleRating,
-  type GooglePlaceRaw,
-  type GoogleReviewRaw,
-} from '../normalize/googlePlace.js';
 import { normalizeNaverBlogResponse, type NaverBlogResponse } from '../normalize/naverBlog.js';
 import { normalizeKakaoBlogResponse, type KakaoBlogResponse } from '../normalize/kakaoBlog.js';
-import { cacheGet, cachePut, cacheGetOrSet } from '../cache/kv.js';
+import { cacheGetOrSet } from '../cache/kv.js';
 import { fetchWithFallback } from '../middleware/degradation.js';
-import type { PlaceDetail, Review, Rating, BlogPost } from '@wayfinder/shared';
+import type { PlaceDetail, BlogPost } from '@wayfinder/shared';
 
 const KAKAO_SEARCH_URL = 'https://dapi.kakao.com/v2/local/search/keyword.json';
-const GOOGLE_PLACE_URL = 'https://places.googleapis.com/v1/places';
 const NAVER_BLOG_URL = 'https://openapi.naver.com/v1/search/blog';
 const KAKAO_BLOG_URL = 'https://dapi.kakao.com/v2/search/blog';
 
@@ -45,25 +39,6 @@ async function fetchKakaoDetail(kakaoId: string, key: string): Promise<KakaoLoca
 
   const data = (await res.json()) as { documents: KakaoLocalDocument[] };
   return data.documents[0] ?? null;
-}
-
-async function fetchGoogleReviews(
-  googleId: string,
-  key: string,
-): Promise<{ reviews: Review[]; rating: Rating | undefined }> {
-  const url = `${GOOGLE_PLACE_URL}/${googleId}`;
-  const res = await fetch(url, {
-    headers: {
-      'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'id,rating,userRatingCount,reviews',
-    },
-  });
-  if (!res.ok) throw new Error(`Google place detail failed: ${res.status}`);
-
-  const data = (await res.json()) as GooglePlaceRaw & { reviews?: GoogleReviewRaw[] };
-  const reviews = (data.reviews ?? []).slice(0, 5).map(normalizeGoogleReview);
-  const rating = normalizeGoogleRating(data);
-  return { reviews, rating };
 }
 
 async function fetchNaverBlogs(q: string, env: Env): Promise<BlogPost[]> {
@@ -134,70 +109,18 @@ export async function handlePlaceDetail(c: Context<{ Bindings: Env }>): Promise<
     if (!doc) return c.json({ error: 'Place not found' }, 404);
     base = normalizeKakaoPlaceDetail(doc);
   } else {
-    // google provider: 기본 구글 정보 fetch (지도 검색 경로는 구글 ID로 바로 조회)
-    const googleData = await fetchWithFallback(
-      () => fetchGoogleReviews(nativeId, c.env.GOOGLE_PLACES_KEY),
-      { reviews: [] as Review[], rating: undefined as Rating | undefined },
-      'google-detail-base',
-    );
+    // google provider: 기본정보만 구성 (구글 평점·리뷰는 /google 라우트에서 lazy 조회)
     base = {
       id: rawId,
       name: nativeId,
       coord: { lat: 0, lng: 0 },
       category: 'Place',
       address: '',
-      reviews: googleData.reviews,
-      rating: googleData.rating,
+      reviews: [],
+      rating: undefined,
       blogs: { naver: [], kakao: [] },
       links: { googleMaps: `https://maps.google.com/?cid=${nativeId}` },
     };
-  }
-
-  // 구글 평점·리뷰 (lazy 병합 — 캐시: 30일 TTL)
-  const googleCacheKey = `google:${provider === 'google' ? nativeId : base.name}`;
-  const cachedGoogle = await cacheGet<{ reviews: Review[]; rating: Rating | undefined }>(
-    c.env.CACHE,
-    'google',
-    googleCacheKey,
-  );
-
-  let reviews: Review[];
-  let rating: Rating | undefined;
-
-  if (cachedGoogle) {
-    reviews = cachedGoogle.reviews;
-    rating = cachedGoogle.rating;
-  } else if (provider === 'kakao') {
-    // 카카오 장소는 이름으로 구글 검색해 reviews 병합
-    const googleResult = await fetchWithFallback(
-      async () => {
-        // 장소 이름으로 Google Text Search → 첫 번째 결과의 리뷰
-        const searchRes = await fetch('https://places.googleapis.com/v1/places:searchText', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': c.env.GOOGLE_PLACES_KEY,
-            'X-Goog-FieldMask': 'places.id',
-          },
-          body: JSON.stringify({ textQuery: `${base.name} ${base.address}`, maxResultCount: 1 }),
-        });
-        if (!searchRes.ok) throw new Error(`Google text search failed: ${searchRes.status}`);
-        const searchData = (await searchRes.json()) as { places?: Array<{ id: string }> };
-        const googlePlaceId = searchData.places?.[0]?.id;
-        if (!googlePlaceId) return { reviews: [] as Review[], rating: undefined as Rating | undefined };
-        return fetchGoogleReviews(googlePlaceId, c.env.GOOGLE_PLACES_KEY);
-      },
-      { reviews: [] as Review[], rating: undefined as Rating | undefined },
-      'google-reviews-merge',
-    );
-    reviews = googleResult.reviews;
-    rating = googleResult.rating;
-    if (reviews.length > 0 || rating) {
-      await cachePut(c.env.CACHE, 'google', googleCacheKey, { reviews, rating });
-    }
-  } else {
-    reviews = base.reviews;
-    rating = base.rating;
   }
 
   // 블로그 (캐시: 6h)
@@ -229,8 +152,6 @@ export async function handlePlaceDetail(c: Context<{ Bindings: Env }>): Promise<
 
   const detail: PlaceDetail = {
     ...base,
-    reviews,
-    rating: rating ?? base.rating,
     blogs: { naver: naverBlogs, kakao: kakaoBlogs },
   };
 

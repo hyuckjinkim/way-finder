@@ -13,6 +13,7 @@
  * 이렇게 분리해야 §11 과금 방어선(구글 탭 열기 전 구글 호출 없음)이 서비스 레이어에서 보장된다.
  */
 import type { Place, PlaceDetail, Rating, Review } from '@wayfinder/shared';
+import { placesSearchPath, placeDetailPath, placeGooglePath } from '@wayfinder/shared/api';
 import { mockPlaceProvider } from '@wayfinder/shared/mocks';
 import { apiFetch, isDemoMode } from './apiClient.js';
 
@@ -28,7 +29,7 @@ export async function search(query: string): Promise<Place[]> {
     return mockPlaceProvider.search(query);
   }
   const encoded = encodeURIComponent(query);
-  const data = await apiFetch(`/v1/places/search?q=${encoded}`);
+  const data = await apiFetch(`${placesSearchPath}?q=${encoded}`);
   return data as Place[];
 }
 
@@ -41,7 +42,7 @@ export async function getDetail(id: string): Promise<PlaceDetail> {
   if (isDemoMode) {
     return mockPlaceProvider.getDetail(id);
   }
-  const data = await apiFetch(`/v1/places/${encodeURIComponent(id)}`);
+  const data = await apiFetch(placeDetailPath(id));
   return data as PlaceDetail;
 }
 
@@ -54,8 +55,6 @@ export async function getGoogleData(id: string): Promise<GooglePlaceData> {
     const detail = await mockPlaceProvider.getDetail(id);
     return { rating: detail.rating, reviews: detail.reviews };
   }
-  const data = await apiFetch(
-    `/v1/places/${encodeURIComponent(id)}/google`,
-  );
+  const data = await apiFetch(placeGooglePath(id));
   return data as GooglePlaceData;
 }
