@@ -22,6 +22,7 @@ import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import type { Env } from '../config.js';
 import { isRouteDemoMode, isValhallaCustomRoute } from '../config.js';
 import { validateRouteBody, runProviderOrError } from './routeValidate.js';
+import { resolveValhallaCustomRoute } from './valhallaProvider.js';
 import {
   normalizeKakaoMobility,
   type KakaoMobilityRaw,
@@ -62,25 +63,6 @@ export interface ValhallaProvider {
    * @param costing 프로필별 pedestrian costing 옵션 (PROFILE_COSTING 매핑값)
    */
   route(req: RouteRequest, costing: PedestrianCostingOptions): Promise<Route>;
-}
-
-/**
- * Valhalla 커스텀 경로 배선 슬롯 (P4 §3 F1.5 — F1 stub).
- *
- * Foundation 단계에선 **미배선** — OW1이 `valhallaProvider.ts`(전용 소유)에서
- * 실 공급자 + extraMinutesFilter(OO1)를 결합해 이 슬롯을 채운다(routeDirect.ts 불가침).
- * 슬롯이 설치되기 전(현재)에는 null을 반환해 호출자가 기존 TMAP 경로로 폴백하게 한다.
- *
- * 주: `validateRouteBody`가 현재 `{stops,mode}`만 통과시키므로 preference는 런타임에
- * 항상 undefined → `isValhallaCustomRoute`가 false → 이 슬롯은 dormant(OW2가
- * routeValidate를 확장하고 OW1이 본 슬롯을 배선하면 활성). 기존 4모드 동작 불변.
- */
-async function tryValhallaCustomRoute(
-  _req: RouteRequest,
-  _env: Env,
-): Promise<Route | null> {
-  // F1 stub — OW1이 valhallaProvider + extraMinutesFilter 배선으로 대체.
-  return null;
 }
 
 /** stops → 카카오모빌리티 body (x=lng, y=lat). 경유지는 waypoints. */
@@ -216,15 +198,15 @@ export async function handleDirectRoute(
     return c.json(route);
   }
 
-  // P4 커스텀 경로 슬롯 (F1 — kr+walk+preference). 현재 dormant:
-  // validateRouteBody가 preference를 통과시키지 않아 항상 미진입. OW2가 검증을,
-  // OW1이 tryValhallaCustomRoute를 배선하면 활성. 기존 4모드 경로 불가침.
+  // P4 커스텀 경로 슬롯 (F1 — kr+walk+preference). OW1이 valhallaProvider.ts의
+  // resolveValhallaCustomRoute(provider + extraMinutesFilter)로 배선. OW2 검증이
+  // preference를 통과시켜 활성. 실패 시 null → 기존 TMAP 도보 폴백. 4모드 불가침.
   if (
     isValhallaCustomRoute(region, mode, result.request.preference)
   ) {
-    const custom = await tryValhallaCustomRoute(result.request, c.env);
+    const custom = await resolveValhallaCustomRoute(result.request, c.env);
     if (custom !== null) return c.json(custom);
-    // 슬롯 미배선/실패 → 기존 TMAP 도보로 폴백(F1 폴백 규약, silent 금지 아님).
+    // 슬롯 실패(컨테이너 다운 등) → 기존 TMAP 도보로 폴백(F1 폴백 규약, silent 금지 아님).
   }
 
   // 실 모드 — 지역·모드별 공급자. 실패 격리(silent 금지) → 502.

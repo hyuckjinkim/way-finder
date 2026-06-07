@@ -19,6 +19,7 @@ import type {
 import type { ValhallaProvider } from './routeDirect.js';
 import type { Env } from '../config.js';
 import { normalizeValhalla, type ValhallaRouteRaw } from '../normalize/valhalla.js';
+import { applyExtraMinutesFilter } from './extraMinutesFilter.js';
 
 /**
  * stops → Valhalla `/route` body. locations는 `{lat, lon}` 순서(Valhalla 규약).
@@ -70,4 +71,31 @@ export function createValhallaProvider(env: Env): ValhallaProvider {
       return normalizeValhalla((await res.json()) as ValhallaRouteRaw);
     },
   };
+}
+
+/**
+ * OW1 — Valhalla 커스텀 경로 실 배선 (A+O join).
+ *
+ * F1 routeDirect.ts의 kr+walk+preference 슬롯이 위임하는 진입점. provider(A2)와
+ * 2-call +N 필터(OO1)를 결합해 `customMeta`(profile·withinBudget·baseline) 포함
+ * Route를 산출한다. routeDirect.ts는 이 함수만 호출하고 기존 4모드 디스패치는 불변.
+ *
+ * **장애 격리 (silent 금지, F1 폴백 규약):** provider 호출이 throw하면(URL 미설정·
+ * 컨테이너 다운·non-2xx) 호출자가 기존 TMAP 도보로 폴백하도록 `null`을 반환한다.
+ * 에러는 라벨과 함께 로깅한다(silent 아님). 그 외 흐름은 항상 P를 서빙(필터 규약).
+ *
+ * @returns 성공 시 customMeta 포함 Route, provider 실패 시 null(호출자 폴백).
+ */
+export async function resolveValhallaCustomRoute(
+  req: RouteRequest,
+  env: Env,
+): Promise<Route | null> {
+  const provider = createValhallaProvider(env);
+  try {
+    return await applyExtraMinutesFilter(provider, req);
+  } catch (err) {
+    // 컨테이너 다운/URL 미설정 등 — silent 금지(로깅) 후 null로 호출자 폴백 유도.
+    console.error('[route] valhalla-custom failed:', err);
+    return null;
+  }
 }

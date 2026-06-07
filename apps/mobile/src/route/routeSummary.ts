@@ -6,8 +6,11 @@
  * - 총 거리(미터) — Route.totalDistanceM 그대로
  * - 환승 수 — transit leg 수 - 1, 0 미만 클램프 (도보/차/자전거는 0)
  * - leg별 대중교통 노선명 목록 (transit leg만, 도착 순서)
+ *
+ * C3(P4): Route.customMeta를 그대로 전달 — 선택 프로필·예산 플래그.
+ * 기존 P2 경로(fastest)는 customMeta 미존재 → 미표시(하위호환).
  */
-import type { Route } from '@wayfinder/shared';
+import type { Route, RouteCustomMeta } from '@wayfinder/shared';
 
 /** Route 요약 — UI 패널 표시용. */
 export interface RouteSummary {
@@ -25,6 +28,12 @@ export interface RouteSummary {
    * 예: ['4호선', '402번'], 도보/차/자전거는 빈 배열.
    */
   lineNames: string[];
+  /**
+   * 커스텀 경로 메타 (P4, 선택). Route.customMeta 그대로.
+   * 기존 P2 경로(fastest)는 undefined — 미표시(하위호환).
+   * RouteResultScreen이 이 필드로 프로필·예산 플래그를 표시한다.
+   */
+  customMeta?: RouteCustomMeta;
 }
 
 /**
@@ -32,6 +41,7 @@ export interface RouteSummary {
  *
  * 환승 수 규약: transit leg 수 - 1 (최소 0).
  * 도보 환승 leg는 transit이 아니므로 카운팅 대상 외.
+ * C3(P4): Route.customMeta를 그대로 전달한다(하위호환 — 미존재 시 undefined).
  */
 export function routeSummary(route: Route): RouteSummary {
   const transitLegs = route.legs.filter((leg) => leg.mode === 'transit');
@@ -45,5 +55,6 @@ export function routeSummary(route: Route): RouteSummary {
     totalDistanceM: route.totalDistanceM,
     transfers,
     lineNames,
+    customMeta: route.customMeta,
   };
 }
