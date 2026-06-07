@@ -5,11 +5,11 @@
   "teamSize": 5,
   "reviewGate": ["architect", "code-reviewer", "security-reviewer", "advisor"],
   "constraints": ["free-tier-only", "no-mac-no-device", "web-first-verification"],
-  "currentPhase": "P1",
+  "currentPhase": "P2",
   "currentStage": "planning",
   "phases": {
-    "P1": { "status": "planning", "plan": ".omc/plans/autopilot-impl-p1.md" },
-    "P2": { "status": "pending" },
+    "P1": { "status": "done", "plan": ".omc/plans/autopilot-impl-p1.md", "approvedBy": ["architect", "code-reviewer", "security-reviewer", "advisor"], "finalCommit": "6e7fdad", "tests": 162 },
+    "P2": { "status": "planning", "plan": ".omc/plans/autopilot-impl-p2.md" },
     "P3": { "status": "pending" },
     "P4": { "status": "pending" },
     "P5": { "status": "pending" }
