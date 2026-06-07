@@ -1,0 +1,7 @@
+# Valhalla 타일·OSM 데이터는 대용량·재생성 가능 — 커밋 금지 (P4 §3 F3.4).
+# 실제 데이터는 WSL 네이티브 경로(~/valhalla-data, ~/valhalla-tiles)에 보관.
+data/
+tiles/
+*.osm.pbf
+*.tar
+valhalla.json

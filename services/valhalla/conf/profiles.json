@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "P4 F3 — wayfinder 커스텀 도보 프로필 → Valhalla pedestrian costing_options.",
+    "§1 1차 출처(valhalla.github.io api-reference) 검증 옵션만 사용. F1 PROFILE_COSTING",
+    "(packages/shared/src/constants/routing.ts)과 동일 값 — 단일 진실 소스는 shared,",
+    "이 파일은 운영 참고용 템플릿(valhallaProvider가 costing_options 본문을 구성한다).",
+    "scenic은 항목 없음(❌ costing 미지원) — 그래프 보강 후속 단계(ENABLE_SCENIC)."
+  ],
+  "profiles": {
+    "fastest": {
+      "_note": "표준 pedestrian — costing 조정 없음(기본값). preference 미지정과 동일.",
+      "costing": "pedestrian",
+      "costing_options": { "pedestrian": {} }
+    },
+    "walkable": {
+      "_note": "보행자 친화 — footway/보도 가중 선호.",
+      "costing": "pedestrian",
+      "costing_options": {
+        "pedestrian": { "walkway_factor": 2.0, "sidewalk_factor": 2.0 }
+      }
+    },
+    "safe": {
+      "_note": "가로등(use_lit=1 비점등 회피) + 소로 회피(alley/driveway)로 큰길 근사.",
+      "costing": "pedestrian",
+      "costing_options": {
+        "pedestrian": { "use_lit": 1.0, "alley_factor": 4.0, "driveway_factor": 8.0 }
+      }
+    },
+    "quiet": {
+      "_note": "footway 가중 + 생활도로 선호로 유동인구 적은 경로 근사.",
+      "costing": "pedestrian",
+      "costing_options": {
+        "pedestrian": { "walkway_factor": 1.5, "use_living_streets": 1.0 }
+      }
+    }
+  }
+}

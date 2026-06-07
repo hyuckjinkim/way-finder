@@ -1,0 +1,37 @@
+# P4 F3 — Valhalla 라우팅 서버 (수도권 타일 서빙).
+#
+# build-tiles.sh가 생성한 타일(valhalla_tiles.tar + valhalla.json)을 서빙한다.
+# 타일 빌드는 1회(build-tiles.sh), 서빙은 이 compose가 담당 (빌드/서빙 분리 — §3 F3.1).
+#
+# 볼륨 = WSL 네이티브 경로(${VALHALLA_DATA:-~/valhalla-tiles}) — IO 속도(/mnt/d 회피).
+# 키 불필요(로컬 self-hosted). 헬스 체크로 기동 검증.
+#
+# 사용법:
+#   1) bash build-tiles.sh                                # 타일 1회 빌드
+#   2) VALHALLA_DATA=~/valhalla-tiles docker compose up -d # 서빙
+#   3) curl localhost:8002/status                          # 헬스 확인
+services:
+  valhalla:
+    image: ghcr.io/valhalla/valhalla:latest
+    container_name: wayfinder-valhalla
+    ports:
+      - "8002:8002"
+    # 빌드 시 메모리 상한과 동일 — 재현성 + OOM 방지 (§3 F3.3).
+    mem_limit: 4g
+    volumes:
+      # WSL 네이티브 경로 권장 (.env의 VALHALLA_DATA로 override).
+      - "${VALHALLA_DATA:-~/valhalla-tiles}:/data"
+    # 서빙 전용: 빌드 스킵(build_tiles=False, build_admins/etc False), tar에서 서빙.
+    environment:
+      - use_tiles_ignore_pbf=True
+      - build_tar=False
+      - serve_tiles=True
+      - force_rebuild=False
+    healthcheck:
+      # /status 200 → 기동 완료 (§3 F3.6).
+      test: ["CMD", "curl", "-f", "http://localhost:8002/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
