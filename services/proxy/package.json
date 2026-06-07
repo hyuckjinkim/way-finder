@@ -10,6 +10,7 @@
     "deploy:dry": "wrangler deploy --dry-run --outdir dist"
   },
   "dependencies": {
+    "@googlemaps/polyline-codec": "1.0.28",
     "@wayfinder/shared": "workspace:*",
     "hono": "4.12.23"
   },
