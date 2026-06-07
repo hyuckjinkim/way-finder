@@ -29,6 +29,14 @@ export default function RootLayout() {
             name="roadview/[id]"
             options={{ title: '로드뷰', headerShown: true }}
           />
+          <Stack.Screen
+            name="route/input"
+            options={{ title: '경로 입력', headerShown: true }}
+          />
+          <Stack.Screen
+            name="route/result"
+            options={{ title: '경로 결과', headerShown: true }}
+          />
           </Stack>
         </SafeAreaProvider>
       </GestureHandlerRootView>
