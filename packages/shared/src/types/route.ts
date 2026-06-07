@@ -9,15 +9,52 @@ import type { LatLng } from './geo.js';
 export type TravelMode = 'walk' | 'transit' | 'car' | 'bike';
 
 /**
- * 경로 탐색 요청 (§8). 클라이언트 → 프록시 `POST /v1/routes` body.
+ * 경로 선호 프로필 (P4 §1). 커스텀 도보 경로 차별화.
+ * - `fastest`: 미지정 기본값 = 기존 P2 동작(표준 pedestrian, costing 조정 없음).
+ * - `walkable`/`safe`/`quiet`: Valhalla costing 조정으로 지원 (routing.ts 매핑 테이블).
+ * - `scenic`: 타입에는 존재하나 P4 costing 미지원(❌) — 그래프 보강 후속 단계에서
+ *   `ENABLE_SCENIC` flag로 활성화. costing 매핑 테이블에 항목 없음.
+ */
+export type RoutePreference = 'fastest' | 'walkable' | 'safe' | 'quiet' | 'scenic';
+
+/**
+ * 경로 탐색 요청 (§8 + P4 §3 F1). 클라이언트 → 프록시 `POST /v1/routes` body.
  *
  * `stops`는 [출발지, …경유지, 도착지] 순서. 길이 제약(2..6, 경유지 ≤5)은
  * 타입이 아니라 런타임 검증(프록시 routeValidate)으로 강제한다.
+ *
+ * `preference`/`maxExtraMinutes`는 P4 신규(선택). 미지정 시 기존 P2 동작과 동일 —
+ * 기존 호출자는 하위호환 유지(미지정=`fastest`=무제한 예산).
  */
 export interface RouteRequest {
   /** 경유 좌표 순서열. stops[0]=출발, stops[last]=도착, 그 사이=경유지(≤5). */
   stops: LatLng[];
   mode: TravelMode;
+  /**
+   * 경로 선호 프로필 (P4). 미지정=`fastest`=기존 동작.
+   * Valhalla 커스텀 경로는 `region==='kr' && mode==='walk' && preference!=='fastest'`에만 진입.
+   */
+  preference?: RoutePreference;
+  /**
+   * "+N분" 예산 (P4 2-call 필터). 프로필 경로가 최속 경로 대비 추가로 허용하는 분.
+   * 미지정=무제한(예산 검사 없음). 범위는 routing.ts MAX_EXTRA_MINUTES 상수.
+   */
+  maxExtraMinutes?: number;
+}
+
+/**
+ * 커스텀 경로 응답 메타 (P4 §3 F1). 2-call +N 필터 결과의 단일 표면.
+ * - 데모 모드: mockRouteProvider가 합성 플래그로 채움 (F2).
+ * - 실 모드: extraMinutesFilter(OO1)가 실 산출값으로 채움.
+ * `fastest`(기존 P2 경로)는 이 메타가 없다(하위호환 — 미존재 시 플래그 미표시).
+ */
+export interface RouteCustomMeta {
+  /** 적용된 선호 프로필. */
+  preference: RoutePreference;
+  /** 프로필 경로 소요가 `최속 + maxExtraMinutes` 예산 이내인지. */
+  withinBudget: boolean;
+  /** 비교 기준이 된 최속(fastest) 경로 소요(초). 데모 합성·실 산출 공통. */
+  baselineDurationSec?: number;
 }
 
 /**
@@ -62,4 +99,9 @@ export interface Route {
   totalDurationSec: number;
   /** 총 거리(미터). */
   totalDistanceM: number;
+  /**
+   * 커스텀 경로 메타 (P4, 선택). 2-call +N 필터 결과 — 프로필·예산 플래그.
+   * 기존 P2 경로(fastest)는 미존재(하위호환). C3 요약·D2 게이트의 단일 입력.
+   */
+  customMeta?: RouteCustomMeta;
 }

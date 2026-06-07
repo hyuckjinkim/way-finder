@@ -29,6 +29,7 @@ function makeEnv(kv?: KVNamespace): Env {
     GOOGLE_ROUTES_KEY: '',
     ODSAY_API_KEY: '',
     MAPBOX_TOKEN: '',
+    VALHALLA_URL: '',
     CACHE: kv ?? makeKV(),
   };
 }

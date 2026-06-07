@@ -15,10 +15,21 @@ export type {
   Route,
   RouteLeg,
   RouteRequest,
+  RouteCustomMeta,
+  RoutePreference,
   TransitMeta,
   TravelMode,
 } from './types/route.js';
-export { TRANSFER_BUFFER_SEC, MAX_WAYPOINTS, MAX_STOPS } from './constants/routing.js';
+export {
+  TRANSFER_BUFFER_SEC,
+  MAX_WAYPOINTS,
+  MAX_STOPS,
+  MIN_EXTRA_MINUTES,
+  MAX_EXTRA_MINUTES,
+  DEFAULT_EXTRA_MINUTES,
+  PROFILE_COSTING,
+} from './constants/routing.js';
+export type { PedestrianCostingOptions } from './constants/routing.js';
 export type {
   MapViewProps,
   MapViewRef,

@@ -16,10 +16,14 @@ import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import { apiPost, isDemoMode } from './apiClient.js';
 
 /**
- * 경로를 탐색하고 단일 `Route`를 반환한다 (§8 — alternatives는 Phase 4).
+ * 경로를 탐색하고 단일 `Route`를 반환한다.
  *
- * @param req  RouteRequest `{ stops, mode }`
- * @returns    탐색된 Route
+ * P4 패스스루(§3 F1.6): `req`의 `preference`·`maxExtraMinutes`(선택)는 그대로
+ * apiPost body(`routesPath`)에 포함돼 프록시로 전달된다 — 앱은 리터럴 0(`req` 전체 전달).
+ * 미지정 시 기존 P2 동작과 동일(하위호환). RouteService.test.ts(C1)가 전달을 단언한다.
+ *
+ * @param req  RouteRequest `{ stops, mode, preference?, maxExtraMinutes? }`
+ * @returns    탐색된 Route (P4: `customMeta` 선택 포함)
  * @throws     실 모드에서 네트워크/HTTP 오류 시 Error
  */
 export async function getRoute(req: RouteRequest): Promise<Route> {
