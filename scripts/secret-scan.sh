@@ -23,8 +23,8 @@ EXCLUDE_FILES='scripts/secret-scan.sh|pnpm-lock.yaml|versions.md'
 PATTERNS=(
   'AIza[0-9A-Za-z_-]{35}'
   '(kakao|KAKAO)[_-]?(rest|REST|js|JS|app|APP)?[_-]?(key|KEY)["'"'"' :=]+[0-9a-f]{32}'
-  '(naver|NAVER)[_-]?(client[_-]?)?secret["'"'"' :=]+[0-9A-Za-z]{10,}'
-  'X-Naver-Client-Secret["'"'"' :=]+[0-9A-Za-z]{8,}'
+  '(naver|NAVER)[_-]?(client[_-]?)?secret["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][0-9A-Za-z]{10,}["'"'"']'
+  'X-Naver-Client-Secret["'"'"']?[[:space:]]*[:=][[:space:]]*["'"'"'][0-9A-Za-z]{8,}["'"'"']'
 )
 
 # 추적 파일 + 언트래킹(무시 제외) 파일 목록. docs/poc도 포함하되 위 EXCLUDE로 거른다.
