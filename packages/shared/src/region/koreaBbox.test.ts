@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   selectRenderer,
+  isKoreaCoord,
+  routeRegion,
   KOREA_BBOX,
   HYSTERESIS_DEG,
   GLOBAL_ZOOM_THRESHOLD,
@@ -67,6 +69,47 @@ describe('selectRenderer — 히스테리시스 완충지대', () => {
     // 한국에서 진입 → 유지, 글로벌에서 진입 → 글로벌 (코어 미진입).
     expect(selectRenderer(inBuffer, HIGH_ZOOM, 'korea')).toBe('korea');
     expect(selectRenderer(inBuffer, HIGH_ZOOM, 'global')).toBe('global');
+  });
+});
+
+describe('isKoreaCoord — 경로용 코어 bbox 판정 (히스테리시스 없음)', () => {
+  it('서울은 한국 좌표', () => {
+    expect(isKoreaCoord(SEOUL)).toBe(true);
+  });
+
+  it('도쿄는 한국 좌표 아님', () => {
+    expect(isKoreaCoord(TOKYO)).toBe(false);
+  });
+
+  it('코어 bbox 모서리(포함)는 한국 좌표', () => {
+    expect(
+      isKoreaCoord({ lat: KOREA_BBOX.maxLat, lng: KOREA_BBOX.maxLng }),
+    ).toBe(true);
+  });
+
+  it('완충지대 안이라도 코어 밖이면 한국 좌표 아님 (selectRenderer와 다름)', () => {
+    const inBuffer: LatLng = {
+      lat: KOREA_BBOX.maxLat + HYSTERESIS_DEG / 2,
+      lng: 128.0,
+    };
+    expect(isKoreaCoord(inBuffer)).toBe(false);
+  });
+});
+
+describe('routeRegion — stops 전체 지역 판정', () => {
+  const BUSAN: LatLng = { lat: 35.1151, lng: 129.0413 };
+
+  it('전체 stops가 한국이면 kr', () => {
+    expect(routeRegion([SEOUL, BUSAN])).toBe('kr');
+  });
+
+  it('하나라도 한국 밖이면 global', () => {
+    expect(routeRegion([SEOUL, TOKYO])).toBe('global');
+    expect(routeRegion([TOKYO, SEOUL])).toBe('global');
+  });
+
+  it('경유지 포함 전부 한국이면 kr', () => {
+    expect(routeRegion([SEOUL, BUSAN, SEOUL])).toBe('kr');
   });
 });
 

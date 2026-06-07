@@ -39,3 +39,30 @@ export async function apiFetch(path: string): Promise<unknown> {
   }
   return res.json() as Promise<unknown>;
 }
+
+/**
+ * 프록시 API에 JSON body로 POST하고 JSON을 반환한다 (예: `POST /v1/routes`).
+ * 실 모드에서만 사용해야 한다(데모 모드에서는 mock provider를 사용할 것).
+ *
+ * @param path  `/v1/routes` 형태의 경로 (shared/api 상수를 사용할 것)
+ * @param body  직렬화할 요청 body (예: RouteRequest `{ stops, mode }`)
+ * @returns     파싱된 JSON (unknown — 호출자가 타입 단언)
+ * @throws      데모 모드 호출·네트워크/HTTP 오류 시 Error
+ */
+export async function apiPost(path: string, body: unknown): Promise<unknown> {
+  if (!API_BASE_URL) {
+    throw new Error(
+      'apiPost called in demo mode — use RouteService which handles mode routing.',
+    );
+  }
+  const url = `${API_BASE_URL}${path}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`API error ${res.status}: ${res.statusText} — ${url}`);
+  }
+  return res.json() as Promise<unknown>;
+}

@@ -26,14 +26,32 @@ export const HYSTERESIS_DEG = 0.5;
 /** 이 줌 미만이면 항상 글로벌 (세계 지도 수준). */
 export const GLOBAL_ZOOM_THRESHOLD = 6;
 
-/** 좌표가 한국 코어 bbox(완충 없음) 안에 있는지. */
-function isInsideCore(coord: LatLng): boolean {
+/**
+ * 좌표가 한국 코어 bbox(완충·히스테리시스 없음) 안에 있는지.
+ * 경로 지역 판정용 순수 함수 (§8 critic M2). 렌더러용 `selectRenderer`와
+ * 별개 — 줌/히스테리시스 시맨틱 없음. 경로 워커는 이것만 사용한다.
+ */
+export function isKoreaCoord(coord: LatLng): boolean {
   return (
     coord.lat >= KOREA_BBOX.minLat &&
     coord.lat <= KOREA_BBOX.maxLat &&
     coord.lng >= KOREA_BBOX.minLng &&
     coord.lng <= KOREA_BBOX.maxLng
   );
+}
+
+/**
+ * 경로 탐색용 지역 판정 (§8 critic M2).
+ * 전체 stops가 한국 코어 bbox 안이면 'kr', 하나라도 밖이면 'global'.
+ * 'kr' → 카카오모빌리티/TMAP/ODsay, 'global' → Google/Mapbox.
+ */
+export function routeRegion(stops: LatLng[]): 'kr' | 'global' {
+  return stops.every(isKoreaCoord) ? 'kr' : 'global';
+}
+
+/** 좌표가 한국 코어 bbox(완충 없음) 안에 있는지. */
+function isInsideCore(coord: LatLng): boolean {
+  return isKoreaCoord(coord);
 }
 
 /** 좌표가 한국 bbox + 완충지대(±0.5°) 안에 있는지. */
