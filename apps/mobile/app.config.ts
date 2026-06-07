@@ -23,10 +23,9 @@ const config: ExpoConfig = {
   platforms: ['ios', 'android', 'web'],
   web: {
     bundler: 'metro',
-    // 'single'(SPA) = classic registerRootComponent 엔트리(E1)와 정합 — index.html을 생성한다.
-    // 'static'(SSG)은 expo-router 라우트를 전제하므로 라우트 없는 E1에서는 빈 .routes.json만 내고
-    // index.html을 만들지 않아 웹 산출물이 로드 불가가 된다. E2가 실 라우트 도입 시 'static'으로 전환 가능.
-    output: 'single',
+    // E2: expo-router app/ 라우트 도입으로 'static'(SSG) 모드로 전환.
+    // 'static'은 expo-router의 파일 기반 라우트를 정적 HTML로 export한다.
+    output: 'static',
   },
   extra: {
     proxyBaseUrl,
