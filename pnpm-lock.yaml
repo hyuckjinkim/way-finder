@@ -117,6 +117,9 @@ importers:
 
   services/proxy:
     dependencies:
+      '@googlemaps/polyline-codec':
+        specifier: 1.0.28
+        version: 1.0.28
       '@wayfinder/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -944,6 +947,9 @@ packages:
   '@expo/xcpretty@4.4.4':
     resolution: {integrity: sha512-4aQzz9vgxcNXFfo/iyNgDDYfsU5XGKKxWxZopw0cVotHiW+U8IJbIxMaxsINs6bHhtkG3StKNPcOrn3eBuxKPw==}
     hasBin: true
+
+  '@googlemaps/polyline-codec@1.0.28':
+    resolution: {integrity: sha512-m7rh8sbxlrHvebXEweBHX8r1uPtToPRYxWDD6p6k2YG8hyhBe0Wi6xRUVFpxpEseMNgF+OBotFQC5senj8K7TQ==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -4825,6 +4831,8 @@ snapshots:
       '@babel/code-frame': 7.29.7
       chalk: 4.1.2
       js-yaml: 4.2.0
+
+  '@googlemaps/polyline-codec@1.0.28': {}
 
   '@img/colour@1.1.0': {}
 

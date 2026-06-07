@@ -22,3 +22,6 @@ export function placeGooglePath(id: string): string {
 
 /** 블로그 검색 경로 (쿼리스트링은 호출자가 부착: `?q=...`). */
 export const blogsPath = '/v1/blogs';
+
+/** 경로 탐색 (§8). `POST` — body `RouteRequest { stops, mode }`. */
+export const routesPath = '/v1/routes';

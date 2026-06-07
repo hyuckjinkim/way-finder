@@ -32,6 +32,8 @@ export interface HomeScreenProps {
   onOpenSearch?: () => void;
   /** 현재 위치 버튼 — LocationService가 제공한 좌표로 카메라 이동(D/E가 배선). */
   onRequestLocation?: () => void;
+  /** 길찾기 버튼 — 경로 입력 화면 진입(E가 배선). */
+  onOpenRoute?: () => void;
 }
 
 export function HomeScreen({
@@ -39,6 +41,7 @@ export function HomeScreen({
   markers,
   onOpenSearch,
   onRequestLocation,
+  onOpenRoute,
 }: HomeScreenProps): React.ReactElement {
   const mapRef = useRef<MapViewRef>(null);
   const [camera, setCamera] = useState<CameraState>(initialCamera);
@@ -71,6 +74,14 @@ export function HomeScreen({
       </View>
 
       <View style={styles.fabWrap} pointerEvents="box-none">
+        <Pressable
+          style={styles.fab}
+          onPress={onOpenRoute}
+          accessibilityRole="button"
+          accessibilityLabel="길찾기"
+        >
+          <Text style={styles.fabIcon}>🧭</Text>
+        </Pressable>
         <Pressable
           style={styles.fab}
           onPress={onRequestLocation}
@@ -111,6 +122,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 24,
+    gap: 12,
   },
   fab: {
     width: 48,

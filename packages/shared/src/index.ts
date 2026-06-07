@@ -11,7 +11,14 @@ export type {
   BlogPost,
   PlaceLinks,
 } from './types/place.js';
-export type { Route, RouteLeg, TravelMode } from './types/route.js';
+export type {
+  Route,
+  RouteLeg,
+  RouteRequest,
+  TransitMeta,
+  TravelMode,
+} from './types/route.js';
+export { TRANSFER_BUFFER_SEC, MAX_WAYPOINTS, MAX_STOPS } from './constants/routing.js';
 export type {
   MapViewProps,
   MapViewRef,

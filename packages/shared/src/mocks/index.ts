@@ -10,3 +10,13 @@ export {
   PlaceNotFoundError,
 } from './provider.js';
 export type { PlaceProvider } from './provider.js';
+export {
+  WALK_SIMPLE,
+  BIKE_SIMPLE,
+  CAR_WAYPOINT,
+  TRANSIT_CHAIN,
+  INTERCITY_STITCH,
+  ROUTE_FIXTURE_COORDS,
+} from './routeFixtures.js';
+export { mockRouteProvider } from './routeProvider.js';
+export type { RouteProvider } from './routeProvider.js';

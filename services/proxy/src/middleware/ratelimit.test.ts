@@ -24,6 +24,11 @@ function makeEnv(kv?: KVNamespace): Env {
     GOOGLE_PLACES_KEY: '',
     NAVER_CLIENT_ID: '',
     NAVER_CLIENT_SECRET: '',
+    KAKAO_MOBILITY_KEY: '',
+    TMAP_APP_KEY: '',
+    GOOGLE_ROUTES_KEY: '',
+    ODSAY_API_KEY: '',
+    MAPBOX_TOKEN: '',
     CACHE: kv ?? makeKV(),
   };
 }
