@@ -1,6 +1,6 @@
-# Wayfinder (가칭)
+# Wayfinder
 
-카카오맵/구글맵 같은 지도 + 길찾기 모바일 앱. 한국은 카카오 생태계, 글로벌은 Google/Mapbox 생태계를 결합한 하이브리드 구조로, 장기적으로 자체 라우팅 엔진 기반의 차별화된 경로 옵션(풍경·안전·한적한 경로, +N분 필터)을 제공하는 것이 목표.
+카카오맵/구글맵 같은 지도 + 길찾기 앱. **iOS / Android / 웹을 하나의 코드베이스(Expo)로 동시 제공**한다. 한국은 카카오 생태계, 글로벌은 Google/Mapbox 생태계를 결합한 하이브리드 구조로, 장기적으로 자체 라우팅 엔진 기반의 차별화된 경로 옵션(풍경·안전·한적한 경로, +N분 필터)을 제공하는 것이 목표.
 
 ## 로드맵
 
@@ -68,7 +68,7 @@
 | 지도 | Kakao Maps SDK(한국) + MapLibre(글로벌) | 하이브리드 — 한국 지도 품질 + 글로벌 커버리지 |
 | 백엔드 | Cloudflare Workers (TypeScript) | 무료 티어, 글로벌 엣지, 키 보호 + 캐싱 |
 | 상태관리 | Zustand + TanStack Query | 가볍고 API 캐싱에 적합 |
-| 빌드/배포 | EAS Build + Expo Web | Mac/실기기 없이 개발 가능 |
+| 빌드/배포 | EAS Build(모바일) + Expo Web→Cloudflare Pages(웹) | Mac/실기기 없이 개발, 웹은 정식 배포 채널 |
 
 ## 디렉토리
 
