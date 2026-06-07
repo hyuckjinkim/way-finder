@@ -8,3 +8,4 @@ export { WALK_SIMPLE_RAW } from './walkSimple.js';
 export { WALK_WAYPOINTS_RAW } from './walkWaypoints.js';
 export { SAFE_PROFILE_RAW } from './safeProfile.js';
 export { WALKABLE_PROFILE_RAW } from './walkableProfile.js';
+export { QUIET_PROFILE_RAW } from './quietProfile.js';

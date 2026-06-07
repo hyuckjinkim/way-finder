@@ -68,6 +68,9 @@ capture safeProfile     SAFE_PROFILE_RAW \
 capture walkableProfile WALKABLE_PROFILE_RAW \
   ',"costing_options":{"pedestrian":{"walkway_factor":2.0,"sidewalk_factor":2.0}}' \
   "[$A,$B]" "걷기좋은 프로필 (walkway/sidewalk 가중)."
+capture quietProfile    QUIET_PROFILE_RAW \
+  ',"costing_options":{"pedestrian":{"walkway_factor":1.5,"use_living_streets":1.0}}' \
+  "[$A,$B]" "한적 프로필 (walkway 가중 + 생활도로 선호)."
 
 rm -rf "${TMP}"
 echo "[capture] DONE → ${OUT}/*.ts"

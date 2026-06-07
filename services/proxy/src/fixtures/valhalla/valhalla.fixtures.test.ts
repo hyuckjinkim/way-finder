@@ -11,6 +11,7 @@ import {
   WALK_WAYPOINTS_RAW,
   SAFE_PROFILE_RAW,
   WALKABLE_PROFILE_RAW,
+  QUIET_PROFILE_RAW,
 } from './index.js';
 
 /** 수도권(서울+경기) 대략 bbox — 정밀도 6 디코드 검증. */
@@ -23,6 +24,7 @@ const FIXTURES = {
   walkWaypoints: WALK_WAYPOINTS_RAW,
   safeProfile: SAFE_PROFILE_RAW,
   walkableProfile: WALKABLE_PROFILE_RAW,
+  quietProfile: QUIET_PROFILE_RAW,
 } as const;
 
 describe('Valhalla 골든 픽스처 — 실 응답 + precision 6', () => {
