@@ -42,13 +42,19 @@ describe('validateRouteBody', () => {
     expect(validateRouteBody({ stops: stops(MIN_STOPS - 1), mode: 'car' }).ok).toBe(false);
   });
 
-  it('stops 7개(최대 초과) → 실패 (경유지 ≤5)', () => {
-    const r = validateRouteBody({ stops: stops(MAX_STOPS + 1), mode: 'car' });
-    expect(r.ok).toBe(false);
+  it('MAX_STOPS는 7 (출발 + 경유지 5 + 도착)', () => {
+    expect(MAX_STOPS).toBe(7);
   });
 
-  it('stops 6개(최대) → ok', () => {
+  it('stops 7개(최대) → ok', () => {
     expect(validateRouteBody({ stops: stops(MAX_STOPS), mode: 'car' }).ok).toBe(true);
+    expect(validateRouteBody({ stops: stops(7), mode: 'car' }).ok).toBe(true);
+  });
+
+  it('stops 8개(최대 초과) → 실패 (경유지 ≤5)', () => {
+    const r = validateRouteBody({ stops: stops(MAX_STOPS + 1), mode: 'car' });
+    expect(r.ok).toBe(false);
+    expect(validateRouteBody({ stops: stops(8), mode: 'car' }).ok).toBe(false);
   });
 
   it('stops가 배열 아님 → 실패', () => {

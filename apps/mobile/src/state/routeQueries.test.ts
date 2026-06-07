@@ -11,6 +11,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   routeQueryKeys,
   routeQueryOptions,
+  createDebounceHandle,
+  scheduleDebounce,
 } from './routeQueries.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
 import type { LatLng, TravelMode } from '@wayfinder/shared';
@@ -98,50 +100,67 @@ describe('ROUTE_DEBOUNCE_MS — §11 쿼터 방어 상수', () => {
   });
 });
 
-// ─── 디바운스 타이머 동작 ─────────────────────────────────────────────────────
+// ─── 디바운스 타이머 동작 (실제 scheduleDebounce — useDebounced 훅이 쓰는 로직) ──────
 
-describe('디바운스 동작 — vi.useFakeTimers()', () => {
-  it('디바운스 간격 내 연속 변경은 마지막 값만 반영', () => {
+describe('scheduleDebounce — useDebounced가 사용하는 실제 디바운스 로직', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('디바운스 간격 내 연속 변경은 마지막 값만 commit', () => {
     vi.useFakeTimers();
-
-    // 타이머 기반 디바운스 로직 직접 테스트
+    const handle = createDebounceHandle();
     let debounced = 0;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const debounce = (val: number) => {
-      if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(() => { debounced = val; }, ROUTE_DEBOUNCE_MS);
+    const commit = (v: number) => {
+      debounced = v;
     };
 
-    debounce(1);
-    debounce(2);
-    debounce(3);
+    scheduleDebounce(handle, 1, ROUTE_DEBOUNCE_MS, commit);
+    scheduleDebounce(handle, 2, ROUTE_DEBOUNCE_MS, commit);
+    scheduleDebounce(handle, 3, ROUTE_DEBOUNCE_MS, commit);
 
     // 아직 타이머 미발화
     expect(debounced).toBe(0);
 
     vi.advanceTimersByTime(ROUTE_DEBOUNCE_MS);
     expect(debounced).toBe(3); // 마지막 값만 반영
-
-    vi.useRealTimers();
   });
 
   it('디바운스 간격 이후 값 안정화', () => {
     vi.useFakeTimers();
-
+    const handle = createDebounceHandle();
     let debounced = '';
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const debounce = (val: string) => {
-      if (timer !== null) clearTimeout(timer);
-      timer = setTimeout(() => { debounced = val; }, ROUTE_DEBOUNCE_MS);
+    const commit = (v: string) => {
+      debounced = v;
     };
 
-    debounce('walk');
+    scheduleDebounce(handle, 'walk', ROUTE_DEBOUNCE_MS, commit);
     vi.advanceTimersByTime(ROUTE_DEBOUNCE_MS);
     expect(debounced).toBe('walk');
+  });
 
-    vi.useRealTimers();
+  it('간격 경과 전에는 commit하지 않는다', () => {
+    vi.useFakeTimers();
+    const handle = createDebounceHandle();
+    const commit = vi.fn();
+
+    scheduleDebounce(handle, 42, ROUTE_DEBOUNCE_MS, commit);
+    vi.advanceTimersByTime(ROUTE_DEBOUNCE_MS - 1);
+    expect(commit).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(commit).toHaveBeenCalledExactlyOnceWith(42);
+  });
+
+  it('반환된 정리 함수가 대기 중 타이머를 취소한다', () => {
+    vi.useFakeTimers();
+    const handle = createDebounceHandle();
+    const commit = vi.fn();
+
+    const cleanup = scheduleDebounce(handle, 7, ROUTE_DEBOUNCE_MS, commit);
+    cleanup();
+    vi.advanceTimersByTime(ROUTE_DEBOUNCE_MS);
+    expect(commit).not.toHaveBeenCalled();
   });
 });
 

@@ -46,27 +46,54 @@ export function routeQueryOptions(
 // ─── 디바운스 유틸 (의존성 없이 자체 구현 — F3 의존 추가 금지) ──────────────────
 
 /**
+ * 디바운스 타이머 핸들 — 직전 타이머 참조를 mutable하게 들고 있는다.
+ * 훅(useDebounced)과 단위 테스트가 동일한 스케줄링 로직을 공유한다(인라인 재구현 금지).
+ */
+export interface DebounceHandle {
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** 새 DebounceHandle 생성. */
+export function createDebounceHandle(): DebounceHandle {
+  return { timer: null };
+}
+
+/**
+ * 직전 타이머를 취소하고 `delayMs`ms 뒤에 `commit(value)`를 1회 발화하도록 예약한다.
+ * 간격 내 연속 호출은 마지막 값만 commit된다(§11 쿼터 방어). 정리 함수를 반환한다.
+ */
+export function scheduleDebounce<T>(
+  handle: DebounceHandle,
+  value: T,
+  delayMs: number,
+  commit: (v: T) => void,
+): () => void {
+  if (handle.timer !== null) {
+    clearTimeout(handle.timer);
+  }
+  handle.timer = setTimeout(() => {
+    commit(value);
+  }, delayMs);
+
+  return () => {
+    if (handle.timer !== null) {
+      clearTimeout(handle.timer);
+    }
+  };
+}
+
+/**
  * 값이 변경될 때 `delayMs`ms 후에 안정화된 값을 반환한다.
  * stops/mode 편집 중 연속 탐색 억제용 (§11 쿼터 방어).
  */
-function useDebounced<T>(value: T, delayMs: number): T {
+export function useDebounced<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState<T>(value);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleRef = useRef<DebounceHandle>(createDebounceHandle());
 
-  useEffect(() => {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-    }
-    timerRef.current = setTimeout(() => {
-      setDebounced(value);
-    }, delayMs);
-
-    return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-      }
-    };
-  }, [value, delayMs]);
+  useEffect(
+    () => scheduleDebounce(handleRef.current, value, delayMs, setDebounced),
+    [value, delayMs],
+  );
 
   return debounced;
 }

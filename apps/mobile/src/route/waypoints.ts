@@ -7,6 +7,7 @@
  * - 출발/도착은 별도 필드로 관리하고, 이 모듈은 경유지 배열만 담당한다.
  */
 import type { LatLng } from '@wayfinder/shared';
+import { MAX_WAYPOINTS } from '@wayfinder/shared';
 
 /** 경유지 엔트리 — UI 표시용 레이블 + 좌표. */
 export interface WaypointEntry {
@@ -16,8 +17,8 @@ export interface WaypointEntry {
   coord: LatLng;
 }
 
-/** 경유지 최대 개수. stops = [출발, ...경유지, 도착], 경유지만 ≤5. */
-export const MAX_WAYPOINTS = 5;
+/** 경유지 최대 개수 (shared 단일 진실 소스 재노출). stops = [출발, ...경유지, 도착], 경유지만 ≤5. */
+export { MAX_WAYPOINTS };
 
 /**
  * 경유지 추가. 이미 MAX_WAYPOINTS개면 변경 없이 원본 반환.
@@ -82,6 +83,16 @@ export function moveWaypointDown(
   result[index] = next;
   result[index + 1] = curr;
   return result;
+}
+
+/**
+ * 장소가 선택된 경유지만 남긴다. 추가 직후 미설정 placeholder
+ * ({ label: '', coord: {0,0} })는 제외 — 제출 시 유령 정지점 방지.
+ */
+export function filterSetWaypoints(
+  waypoints: readonly WaypointEntry[],
+): WaypointEntry[] {
+  return waypoints.filter((w) => w.label.length > 0);
 }
 
 /**

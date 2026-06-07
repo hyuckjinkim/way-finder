@@ -66,15 +66,15 @@ function parseDurationSec(d: string | undefined): number {
   return m ? Math.round(parseFloat(m[1]!)) : 0;
 }
 
-/** encodedPolyline → LatLng[] (디코드 실패/누락 시 빈 배열). */
+/**
+ * encodedPolyline → LatLng[]. 누락이면 빈 배열, 디코드 실패는 throw.
+ * (googleRoutes.ts와 동일 정책 — 디코드 에러를 삼키지 않고 장애 격리 미들웨어가
+ *  명시적 502로 처리하게 한다. 워커 간 디코드 에러 정책 일관성.)
+ */
 function decodePolyline(poly: GooglePolyline | undefined): LatLng[] {
   const enc = poly?.encodedPolyline;
   if (!enc) return [];
-  try {
-    return decode(enc, 5).map(([lat, lng]) => ({ lat, lng }));
-  } catch {
-    return [];
-  }
+  return decode(enc, 5).map(([lat, lng]) => ({ lat, lng }));
 }
 
 /** Google vehicle.type → 시내/도시간 lineType ('air'는 절대 생성 안 함). */

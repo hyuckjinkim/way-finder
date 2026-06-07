@@ -2,7 +2,7 @@
  * A3 — 경로 요청 입력 검증 + 장애 격리 헬퍼.
  *
  * `POST /v1/routes` body `{ stops, mode }`의 런타임 검증:
- * - stops 길이 2..6 (출발+도착 필수, 경유지 ≤5 → 최대 6).
+ * - stops 길이 2..7 (출발+도착 필수, 경유지 ≤MAX_WAYPOINTS(5) → 최대 7).
  * - 각 stop이 유효한 LatLng (lat -90..90, lng -180..180).
  * - mode가 TravelMode 화이트리스트.
  *
@@ -10,13 +10,17 @@
  * (silent failure 금지 — `runProviderOrError` 사용).
  */
 import type { LatLng, TravelMode, RouteRequest } from '@wayfinder/shared';
+import { MAX_STOPS } from '@wayfinder/shared';
 
 /** 허용 이동 수단 화이트리스트 (TravelMode 유니온과 동기). */
 const VALID_MODES: readonly TravelMode[] = ['walk', 'transit', 'car', 'bike'];
 
-/** stops 최소/최대 (출발+도착 필수, 경유지 ≤5). */
+/**
+ * stops 최소/최대. 출발+도착 필수이므로 최소 2.
+ * 최대는 shared MAX_STOPS(= MAX_WAYPOINTS + 2 = 7) — 앱 경유지 한도와 단일 진실 소스 공유.
+ */
 export const MIN_STOPS = 2;
-export const MAX_STOPS = 6;
+export { MAX_STOPS };
 
 /** 검증 결과 — 성공이면 파싱된 RouteRequest, 실패면 메시지. */
 export type ValidateResult =

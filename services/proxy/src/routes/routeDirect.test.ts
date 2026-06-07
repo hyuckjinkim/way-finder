@@ -165,10 +165,16 @@ describe('POST /v1/routes — 입력 검증', () => {
     expect(res.status).toBe(400);
   });
 
-  it('stops 7개 → 400 (경유지 ≤5)', async () => {
+  it('stops 8개 → 400 (경유지 ≤5 → 최대 7)', async () => {
+    const eight = Array.from({ length: 8 }, () => ({ lat: 37.5, lng: 127.0 }));
+    const res = await postRoute(eight, 'car', demoEnv());
+    expect(res.status).toBe(400);
+  });
+
+  it('stops 7개(최대) → 400 아님 (200 데모 Route)', async () => {
     const seven = Array.from({ length: 7 }, () => ({ lat: 37.5, lng: 127.0 }));
     const res = await postRoute(seven, 'car', demoEnv());
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 
   it('알 수 없는 mode → 400', async () => {

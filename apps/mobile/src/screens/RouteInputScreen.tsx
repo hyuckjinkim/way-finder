@@ -33,6 +33,8 @@ import {
   moveWaypointUp,
   moveWaypointDown,
   toStops,
+  filterSetWaypoints,
+  MAX_WAYPOINTS,
 } from '../route/waypoints.js';
 
 export interface RouteInputScreenProps {
@@ -135,7 +137,8 @@ export function RouteInputScreen({
 
   const handleSubmit = useCallback(() => {
     if (!origin || !destination) return;
-    const stops = toStops(origin.coord, waypoints, destination.coord);
+    // 미설정 경유지({0,0} placeholder, label='')는 제출에서 제외 — 장소를 고른 경유지만 stops에 포함.
+    const stops = toStops(origin.coord, filterSetWaypoints(waypoints), destination.coord);
     onSubmit?.({ stops, mode: tabToMode(mode) });
   }, [origin, destination, waypoints, mode, onSubmit]);
 
@@ -218,8 +221,8 @@ export function RouteInputScreen({
           </View>
         ))}
 
-        {/* 경유지 추가 버튼 (≤5 한도) */}
-        {waypoints.length < 5 ? (
+        {/* 경유지 추가 버튼 (≤MAX_WAYPOINTS 한도) */}
+        {waypoints.length < MAX_WAYPOINTS ? (
           <Pressable
             style={styles.addWaypointBtn}
             onPress={handleAddWaypoint}

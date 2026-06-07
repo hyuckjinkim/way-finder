@@ -8,9 +8,11 @@ import {
   moveWaypointUp,
   moveWaypointDown,
   toStops,
+  filterSetWaypoints,
   MAX_WAYPOINTS,
 } from './waypoints.js';
 import type { WaypointEntry } from './waypoints.js';
+import { MAX_STOPS } from '@wayfinder/shared';
 
 const A: WaypointEntry = { label: 'A', coord: { lat: 37.5, lng: 127.0 } };
 const B: WaypointEntry = { label: 'B', coord: { lat: 37.51, lng: 127.01 } };
@@ -21,6 +23,11 @@ const E: WaypointEntry = { label: 'E', coord: { lat: 37.54, lng: 127.04 } };
 describe('MAX_WAYPOINTS', () => {
   it('5여야 한다', () => {
     expect(MAX_WAYPOINTS).toBe(5);
+  });
+
+  it('프록시 MAX_STOPS와 정합 — MAX_STOPS = MAX_WAYPOINTS + 2 (출발 + 경유지 + 도착)', () => {
+    expect(MAX_STOPS).toBe(MAX_WAYPOINTS + 2);
+    expect(MAX_STOPS).toBe(7);
   });
 });
 
@@ -138,6 +145,30 @@ describe('moveWaypointDown', () => {
     const orig = [A, B, C];
     moveWaypointDown(orig, 0);
     expect(orig[0]).toEqual(A);
+  });
+});
+
+describe('filterSetWaypoints — 미설정 placeholder 제외', () => {
+  const UNSET: WaypointEntry = { label: '', coord: { lat: 0, lng: 0 } };
+
+  it('label이 빈 경유지({0,0} placeholder)를 제거한다', () => {
+    expect(filterSetWaypoints([A, UNSET, B])).toEqual([A, B]);
+  });
+
+  it('전부 설정된 경유지는 그대로 둔다', () => {
+    expect(filterSetWaypoints([A, B, C])).toEqual([A, B, C]);
+  });
+
+  it('전부 미설정이면 빈 배열', () => {
+    expect(filterSetWaypoints([UNSET, UNSET])).toEqual([]);
+  });
+
+  it('toStops와 결합 시 유령 {0,0} 정지점이 stops에 들어가지 않는다', () => {
+    const origin = { lat: 37.5, lng: 126.9 };
+    const destination = { lat: 37.6, lng: 127.1 };
+    const stops = toStops(origin, filterSetWaypoints([A, UNSET]), destination);
+    expect(stops).toEqual([origin, A.coord, destination]);
+    expect(stops).not.toContainEqual({ lat: 0, lng: 0 });
   });
 });
 

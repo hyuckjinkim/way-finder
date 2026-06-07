@@ -27,6 +27,7 @@ function makeEnv(kv?: KVNamespace): Env {
     KAKAO_MOBILITY_KEY: '',
     TMAP_APP_KEY: '',
     GOOGLE_ROUTES_KEY: '',
+    ODSAY_API_KEY: '',
     MAPBOX_TOKEN: '',
     CACHE: kv ?? makeKV(),
   };
