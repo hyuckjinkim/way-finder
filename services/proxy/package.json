@@ -1,0 +1,23 @@
+{
+  "name": "@wayfinder/proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "deploy:dry": "wrangler deploy --dry-run --outdir dist"
+  },
+  "dependencies": {
+    "@wayfinder/shared": "workspace:*",
+    "hono": "4.12.23"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.16.13",
+    "@cloudflare/workers-types": "4.20260607.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8",
+    "wrangler": "4.98.0"
+  }
+}

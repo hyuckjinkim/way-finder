@@ -70,11 +70,41 @@
 | 상태관리 | Zustand + TanStack Query | 가볍고 API 캐싱에 적합 |
 | 빌드/배포 | EAS Build(모바일) + Expo Web→Cloudflare Pages(웹) | Mac/실기기 없이 개발, 웹은 정식 배포 채널 |
 
-## 디렉토리
+## 디렉토리 (Phase 1 모노레포)
 
 ```
 wayfinder/
-├── README.md          # 이 문서 (아키텍처 개요)
+├── README.md              # 이 문서 (아키텍처 개요)
+├── versions.md            # 핵심 도구체인 버전 핀
+├── package.json           # pnpm workspaces 루트
+├── pnpm-workspace.yaml    # 워크스페이스 + nodeLinker:hoisted + overrides
+├── tsconfig.base.json     # 공통 컴파일러 옵션
+├── packages/
+│   └── shared/            # @wayfinder/shared — 정규화 타입 + MapView 인터페이스 + 목 픽스처 + region 판정
+├── apps/
+│   └── mobile/            # @wayfinder/mobile — Expo (RN + web). 현재 MapView stub만 (스트림 E가 본설치)
+├── services/
+│   └── proxy/             # @wayfinder/proxy — Cloudflare Workers + Hono. 현재 placeholder worker
+├── scripts/
+│   └── secret-scan.sh     # 하드코딩 키 차단 게이트 (CI)
 └── poc/
-    └── map-compare/   # MapLibre(OSM) vs 카카오맵 지도 품질 비교 PoC
+    └── map-compare/       # MapLibre(OSM) vs 카카오맵 지도 품질 비교 PoC
 ```
+
+## 개발 (빌드/테스트 명령)
+
+> 키 0개로 전체 게이트가 통과한다 (데모 모드). 실 API 키는 `wrangler secret` + 앱 env로 별도 주입.
+
+```bash
+# Node 22 (.nvmrc), pnpm 11. pnpm 미설치 시: corepack enable && corepack prepare pnpm@latest --activate
+pnpm install                          # 워크스페이스 전체 설치 (frozen lockfile은 CI)
+
+pnpm -r typecheck                     # 전 패키지 타입 검사
+pnpm -r test                          # 전 패키지 단위/통합 테스트 (Vitest)
+pnpm --filter @wayfinder/shared test  # 특정 패키지만
+
+bash scripts/secret-scan.sh           # 하드코딩 키 스캔 (CI 게이트)
+pnpm --filter @wayfinder/proxy deploy:dry   # wrangler dry-run (키 불요)
+```
+
+> **WSL2(/mnt/d) 주의:** Metro/웹 watch에는 `WATCHPACK_POLLING=true CHOKIDAR_USEPOLLING=true`가 필요하다(inotify 미지원). 심볼릭 링크 취약 → `nodeLinker: hoisted` 사용.

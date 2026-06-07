@@ -1,0 +1,23 @@
+# Cloudflare Workers 설정 — wayfinder 프록시 (Foundation F4)
+# 시크릿 없음. 실 키는 `wrangler secret put <NAME>`으로 별도 주입 (앱/저장소에 키 미포함).
+
+name = "wayfinder-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-06-07"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers KV — 캐싱 (블로그 6h·장소 24h·구글 30일 한도). 실 배포 시 id를 발급받아 채운다.
+# 로컬/dry-run에서는 placeholder id로 충분.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "00000000000000000000000000000000"
+
+# 비밀이 아닌 런타임 플래그. 키 미설정 시 앱은 데모 모드로 동작 (스트림 A5).
+[vars]
+DEMO_MODE = "auto"
+
+# 실 시크릿(여기에 값을 넣지 말 것 — 문서용 목록):
+#   wrangler secret put KAKAO_REST_KEY
+#   wrangler secret put GOOGLE_PLACES_KEY
+#   wrangler secret put NAVER_CLIENT_ID
+#   wrangler secret put NAVER_CLIENT_SECRET

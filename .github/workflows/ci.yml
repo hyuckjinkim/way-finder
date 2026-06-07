@@ -1,0 +1,48 @@
+name: CI
+
+# 키 0개로 전체 게이트 통과 (Foundation F4). 실 API 키 불요 — 데모 모드 기준.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.3.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Test
+        run: pnpm -r test
+
+      - name: Secret scan
+        run: bash scripts/secret-scan.sh
+
+      - name: Web export (mobile, demo mode — no keys)
+        # 스트림 E(E1)가 export:web 스크립트를 추가하면 활성화된다.
+        # Foundation 단계에서는 스크립트 부재 시 스킵 (게이트는 E3에서 강제).
+        run: |
+          if pnpm --filter @wayfinder/mobile run 2>/dev/null | grep -q 'export:web'; then
+            pnpm --filter @wayfinder/mobile export:web
+          else
+            echo "export:web 스크립트 미정의 — 스트림 E(E1) 대기 중. 스킵."
+          fi
