@@ -32,12 +32,13 @@ const config: ExpoConfig = {
     demoMode,
     kakaoJsKey,
   },
-  // 카카오 네이티브 config plugin 슬롯 — 스트림 B(B2)가 실제 플러그인으로 채운다.
-  // 예: ['@react-native-kakao/core', { nativeAppKey: kakaoNativeAppKey }]
+  // 카카오 네이티브 config plugin 배선 (스트림 B / B2).
+  // @react-native-kakao/core가 Expo config plugin(app.plugin.js)을 제공하며,
+  // nativeAppKey로 Android/iOS 네이티브 SDK를 prebuild 시 구성한다.
+  // 키 미설정(데모 모드)이면 플러그인을 배선하지 않아 키 0개로 빌드/웹 export가 통과한다.
+  // 디바이스 동작 검증은 사용자 키 발급 후(§7 명시적 한계).
   plugins: kakaoNativeAppKey
-    ? [
-        // ['@react-native-kakao/core', { nativeAppKey: kakaoNativeAppKey }],
-      ]
+    ? [['@react-native-kakao/core', { nativeAppKey: kakaoNativeAppKey }]]
     : [],
 };
 

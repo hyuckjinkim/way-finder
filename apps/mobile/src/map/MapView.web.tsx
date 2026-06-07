@@ -1,62 +1,50 @@
 /**
- * <MapView> 웹 stub (F5 — Foundation 소유).
+ * <MapView> 통합 디스패처 — 웹 (B4, F5 stub을 덮어씀 · 소유권 핸드오프 M2).
  *
- * 네이티브 stub과 동일한 MapViewProps/MapViewRef 계약을 만족하는 no-op stub이다.
- * react-native-web을 통해 동일한 RN 컴포넌트를 사용하므로 웹 export에서 그대로 마운트된다.
+ * RegionProvider(`useRegionRenderer`)로 카메라에 따라 한국(Kakao 웹)/글로벌(MapLibre 웹)
+ * 구현체를 분기한다. flyTo/fitBounds는 활성 구현체 ref로 위임한다.
  *
- * 웹 번들 격리 불변식(B4): 이 `.web.tsx` 경로는 네이티브 맵 모듈
- * (@maplibre/maplibre-react-native, @react-native-kakao/map)을 절대 import하지 않는다.
- * (현 stub은 어떤 맵 SDK도 import하지 않음.)
+ * **웹 번들 격리 불변식(B4)**: 이 파일은 `.web` 구현체(`MapView.kakao.web`,
+ * `MapView.maplibre.web`)만 import한다. 네이티브 맵 모듈
+ * (`@react-native-kakao/map`, `@maplibre/maplibre-react-native`)이 transitively라도
+ * 웹 번들에 유입되지 않도록, 네이티브 디스패처(`MapView.tsx`)나 네이티브 구현
+ * (`MapView.kakao.tsx`, `MapView.maplibre.tsx`)을 절대 import하지 않는다.
  */
-import React, { forwardRef, useImperativeHandle } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+} from 'react';
 import type { MapViewProps, MapViewRef } from '@wayfinder/shared';
+import { useRegionRenderer } from './RegionProvider.js';
+import MapViewKakaoWeb from './MapView.kakao.web.js';
+import MapViewMapLibreWeb from './MapView.maplibre.web.js';
 
 const MapView = forwardRef<MapViewRef, MapViewProps>(function MapView(
   props,
   ref,
 ) {
+  const renderer = useRegionRenderer(props.camera);
+  const implRef = useRef<MapViewRef>(null);
+
   useImperativeHandle(
     ref,
     () => ({
-      flyTo() {
-        // no-op stub
+      flyTo(center, zoom) {
+        implRef.current?.flyTo(center, zoom);
       },
-      fitBounds() {
-        // no-op stub
+      fitBounds(bounds, padding) {
+        implRef.current?.fitBounds(bounds, padding);
       },
     }),
     [],
   );
 
-  const { center, zoom } = props.camera;
-
-  return (
-    <View style={styles.placeholder}>
-      <Text style={styles.label}>MapView (web stub)</Text>
-      <Text style={styles.coord}>
-        {center.lat.toFixed(4)}, {center.lng.toFixed(4)} · z{zoom}
-      </Text>
-    </View>
+  return renderer === 'korea' ? (
+    <MapViewKakaoWeb ref={implRef} {...props} />
+  ) : (
+    <MapViewMapLibreWeb ref={implRef} {...props} />
   );
-});
-
-const styles = StyleSheet.create({
-  placeholder: {
-    flex: 1,
-    backgroundColor: '#e0e0e0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    fontSize: 16,
-    color: '#555',
-  },
-  coord: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-  },
 });
 
 export default MapView;
