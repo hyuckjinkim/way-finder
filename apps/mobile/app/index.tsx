@@ -29,12 +29,15 @@ export default function HomeRoute() {
     void getCurrentCamera().then(setCamera);
   }, [setCamera]);
 
+  const onOpenRoute = useCallback(() => router.push('/route/input'), [router]);
+
   return (
     <HomeScreen
       initialCamera={camera}
       markers={markers}
       onOpenSearch={onOpenSearch}
       onRequestLocation={onRequestLocation}
+      onOpenRoute={onOpenRoute}
     />
   );
 }

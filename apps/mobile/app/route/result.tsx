@@ -1,23 +1,25 @@
 /**
- * 경로 결과 라우트 — /route/result (E1).
+ * 경로 결과 라우트 — /route/result (E2).
  *
- * D4 RouteResultScreen이 완성되면 import하여 교체한다.
- * 현재는 placeholder stub — 경로입력→결과 네비 배선 검증용.
+ * D4 RouteResultScreen에 어댑터로 배선(화면 시그니처 불변, 어댑터는 라우트 파일).
+ * D2 routeStore의 stops·mode를 읽어 D 훅 useRouteQuery로 경로를 탐색하고
+ * 결과 Route를 화면에 주입한다. 데모 모드에서는 mockRouteProvider 데이터가 흐른다.
+ * QueryClientProvider는 app/_layout.tsx가 제공한다.
  */
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { RouteResultScreen } from '../../src/screens/RouteResultScreen';
+import { useRouteStore } from '../../src/state/routeStore';
+import { useRouteQuery } from '../../src/state/routeQueries';
 
 export default function RouteResultRoute() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>경로 결과</Text>
-      <Text style={styles.sub}>D4 RouteResultScreen 연결 대기 중</Text>
-    </View>
-  );
-}
+  const router = useRouter();
+  const stops = useRouteStore((s) => s.stops);
+  const mode = useRouteStore((s) => s.mode);
 
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '600', marginBottom: 8 },
-  sub: { fontSize: 14, color: '#666' },
-});
+  const { data } = useRouteQuery(stops, mode);
+
+  const onBack = React.useCallback(() => router.back(), [router]);
+
+  return <RouteResultScreen route={data ?? null} onBack={onBack} />;
+}
