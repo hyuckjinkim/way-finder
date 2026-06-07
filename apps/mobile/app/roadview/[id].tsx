@@ -1,36 +1,46 @@
 /**
- * Roadview 라우트 — /roadview/[id] (E2).
+ * Roadview 라우트 — /roadview/[id] (E3).
  *
- * 장소 상세(PlaceDetailSheet)에서 전용 화면으로 진입 (설계 문서 §5).
- * src/screens/RoadviewScreen 미존재: 인라인 placeholder.
- * 스트림 C(C5)가 RoadviewScreen을 완성하면 아래 import로 교체한다:
- *   import RoadviewScreen from '../../src/screens/RoadviewScreen';
+ * 장소 상세에서 전용 화면으로 진입(설계 문서 §5).
+ * C5 RoadviewScreen에 배선(시그니처 불변). 상세 데이터는 D4 usePlaceDetailQuery(데모 모드 →
+ * mockPlaceProvider). 데모 모드는 kakaoJsKey 미주입 → placeholder 렌더.
+ *
+ * 정적 export 시 detail이 한동안 undefined이므로 가드 후 렌더한다(detail.coord 참조 보호).
  */
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { RoadviewScreen } from '../../src/screens/RoadviewScreen';
+import { usePlaceDetailQuery } from '../../src/state/queries';
 
 export default function RoadviewRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const placeId = id ?? null;
+  const { data: detail, isError } = usePlaceDetailQuery(placeId);
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>로드뷰</Text>
-      <Text style={styles.subtitle}>RoadviewScreen (placeholder)</Text>
-      <Text style={styles.id}>id: {id}</Text>
-      <Pressable style={styles.button} onPress={() => router.back()}>
-        <Text style={styles.buttonText}>뒤로</Text>
-      </Pressable>
-    </View>
-  );
+  const onBack = useCallback(() => router.back(), [router]);
+
+  if (isError) {
+    return (
+      <View style={styles.fallback}>
+        <Text style={styles.fallbackText}>장소를 불러올 수 없어요.</Text>
+      </View>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <View style={styles.fallback}>
+        <Text style={styles.fallbackText}>불러오는 중…</Text>
+      </View>
+    );
+  }
+
+  return <RoadviewScreen detail={detail} onBack={onBack} />;
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111', padding: 24 },
-  title: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
-  subtitle: { fontSize: 13, color: '#aaa', marginTop: 4, marginBottom: 12 },
-  id: { fontSize: 12, color: '#666', marginBottom: 24 },
-  button: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  buttonText: { color: '#fff', fontSize: 16 },
+  fallback: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' },
+  fallbackText: { fontSize: 14, color: '#aaa' },
 });

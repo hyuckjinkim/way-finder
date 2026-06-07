@@ -1,32 +1,40 @@
 /**
- * Home 라우트 — / (E2).
+ * Home 라우트 — / (E3).
  *
- * src/screens/HomeScreen 미존재: 인라인 placeholder.
- * 스트림 C(C1)가 HomeScreen을 완성하면 아래 import로 교체한다:
- *   import HomeScreen from '../src/screens/HomeScreen';
+ * C1 HomeScreen에 어댑터로 배선한다(화면 시그니처 불변, 어댑터는 라우트 파일).
+ * - 카메라/선택 장소는 D4 Zustand 스토어(useAppStore)에 연결.
+ * - 검색바 탭 → /search, 현재 위치 버튼 → LocationService(데모 모드는 서울 폴백).
  */
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback } from 'react';
 import { useRouter } from 'expo-router';
+import type { MapMarker } from '@wayfinder/shared';
+import { HomeScreen } from '../src/screens/HomeScreen';
+import { useAppStore } from '../src/state/store';
+import { getCurrentCamera } from '../src/services/LocationService';
 
 export default function HomeRoute() {
   const router = useRouter();
+  const camera = useAppStore((s) => s.camera);
+  const selectedPlaceId = useAppStore((s) => s.selectedPlaceId);
+  const setCamera = useAppStore((s) => s.setCamera);
+
+  // 선택된 장소가 있으면 마커 1개(좌표는 스토어 카메라 center로 근사 — 검색에서 카메라를 좌표로 이동).
+  const markers: MapMarker[] | undefined = selectedPlaceId
+    ? [{ id: selectedPlaceId, coord: camera.center }]
+    : undefined;
+
+  const onOpenSearch = useCallback(() => router.push('/search'), [router]);
+
+  const onRequestLocation = useCallback(() => {
+    void getCurrentCamera().then(setCamera);
+  }, [setCamera]);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Wayfinder</Text>
-      <Text style={styles.subtitle}>지도 홈 (placeholder)</Text>
-      <Pressable style={styles.button} onPress={() => router.push('/search')}>
-        <Text style={styles.buttonText}>검색으로 이동</Text>
-      </Pressable>
-    </View>
+    <HomeScreen
+      initialCamera={camera}
+      markers={markers}
+      onOpenSearch={onOpenSearch}
+      onRequestLocation={onRequestLocation}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-  subtitle: { fontSize: 14, color: '#888', marginTop: 4, marginBottom: 24 },
-  button: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  buttonText: { color: '#fff', fontSize: 16 },
-});

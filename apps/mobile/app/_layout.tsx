@@ -8,12 +8,17 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// 데모/실 모드 공통 쿼리 클라이언트 (D4 훅 usePlaceDetailQuery 등이 사용).
+const queryClient = new QueryClient();
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <Stack>
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <Stack>
           <Stack.Screen name="index" options={{ title: 'Wayfinder', headerShown: false }} />
           <Stack.Screen name="search" options={{ title: '검색', headerShown: true }} />
           <Stack.Screen
@@ -24,8 +29,9 @@ export default function RootLayout() {
             name="roadview/[id]"
             options={{ title: '로드뷰', headerShown: true }}
           />
-        </Stack>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+          </Stack>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </QueryClientProvider>
   );
 }

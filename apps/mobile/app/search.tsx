@@ -1,35 +1,31 @@
 /**
- * Search 라우트 — /search (E2).
+ * Search 라우트 — /search (E3).
  *
- * src/screens/SearchScreen 미존재: 인라인 placeholder.
- * 스트림 C(C2)가 SearchScreen을 완성하면 아래 import로 교체한다:
- *   import SearchScreen from '../src/screens/SearchScreen';
+ * C2 SearchScreen에 배선(시그니처 불변). provider는 화면 기본값(mockPlaceProvider)을 그대로 사용 —
+ * 데모 모드에서 mock 데이터가 흐른다. 장소 선택 시 D4 스토어에 카메라·선택 장소를 기록하고
+ * /place/[id] 상세로 이동한다.
  */
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import React, { useCallback } from 'react';
 import { useRouter } from 'expo-router';
+import type { CameraState, Place } from '@wayfinder/shared';
+import { SearchScreen } from '../src/screens/SearchScreen';
+import { useAppStore } from '../src/state/store';
 
 export default function SearchRoute() {
   const router = useRouter();
+  const setCamera = useAppStore((s) => s.setCamera);
+  const selectPlace = useAppStore((s) => s.selectPlace);
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>검색</Text>
-      <Text style={styles.subtitle}>SearchScreen (placeholder)</Text>
-      <Pressable
-        style={styles.button}
-        onPress={() => router.push('/place/kakao:26338954')}
-      >
-        <Text style={styles.buttonText}>장소 상세 (demo)</Text>
-      </Pressable>
-    </View>
+  const onSelectPlace = useCallback(
+    (place: Place, camera: CameraState) => {
+      setCamera(camera);
+      selectPlace(place.id);
+      router.push(`/place/${encodeURIComponent(place.id)}`);
+    },
+    [router, setCamera, selectPlace],
   );
-}
 
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f5f5' },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-  subtitle: { fontSize: 14, color: '#888', marginTop: 4, marginBottom: 24 },
-  button: { backgroundColor: '#2563eb', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8 },
-  buttonText: { color: '#fff', fontSize: 16 },
-});
+  const onCancel = useCallback(() => router.back(), [router]);
+
+  return <SearchScreen onSelectPlace={onSelectPlace} onCancel={onCancel} />;
+}
