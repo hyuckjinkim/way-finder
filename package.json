@@ -1,0 +1,19 @@
+{
+  "name": "wayfinder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "지도 + 길찾기 앱 (Expo + Cloudflare Workers) — Phase 1 모노레포 루트",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.3.0",
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
+  }
+}
