@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>지도 디테일 비교 — MapLibre(OSM) vs 카카오맵</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet"
+      integrity="sha384-MinO0mNliZ3vwppuPOUnGa+iq619pfMhLVUXfC4LHwSCvF9H+6P/KO4Q7qBOYV5V" crossorigin="anonymous">
+<style>
+  body { margin: 0; font-family: -apple-system, "Malgun Gothic", sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; left: 0; right: 320px; }
+  #panel {
+    position: absolute; top: 0; bottom: 0; right: 0; width: 320px;
+    box-sizing: border-box; padding: 16px; background: #1e1e2e; color: #eee;
+    overflow-y: auto;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p.desc { font-size: 12px; color: #aaa; margin: 0 0 16px; line-height: 1.5; }
+  h2 { font-size: 13px; color: #89b4fa; margin: 16px 0 8px; }
+  button.preset {
+    display: block; width: 100%; margin: 4px 0; padding: 8px 10px;
+    background: #313244; color: #eee; border: none; border-radius: 6px;
+    text-align: left; cursor: pointer; font-size: 13px;
+  }
+  button.preset:hover { background: #45475a; }
+  button.preset small { color: #999; display: block; font-size: 11px; }
+  a.ext {
+    display: block; margin: 6px 0; padding: 10px; border-radius: 6px;
+    text-decoration: none; font-size: 13px; font-weight: 600; text-align: center;
+  }
+  a.kakao { background: #fee500; color: #191919; }
+  a.google { background: #4285f4; color: #fff; }
+  a.osm { background: #76b82a; color: #fff; }
+  #coords { font-size: 11px; color: #888; margin-top: 12px; word-break: break-all; }
+  .hint { font-size: 11px; color: #f9e2af; line-height: 1.5; margin-top: 12px;
+    background: #31324480; padding: 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h1>MapLibre (OSM) vs 카카오맵</h1>
+  <p class="desc">
+    왼쪽 지도가 <b>앱의 한국 화면에 실제로 들어갈 모습</b>입니다
+    (MapLibre GL + OpenFreeMap 타일).<br><br>
+    지도를 원하는 곳으로 움직인 뒤, 아래 버튼으로 <b>같은 위치를 카카오맵에서</b> 열어 비교하세요.
+  </p>
+
+  <h2>비교 추천 위치</h2>
+  <button class="preset" data-c="127.02761,37.49794,16">강남역
+    <small>번화가 — POI 밀도 차이가 가장 잘 보임</small></button>
+  <button class="preset" data-c="126.92365,37.55676,16">홍대입구
+    <small>골목 상권 — 상호 라벨 비교</small></button>
+  <button class="preset" data-c="126.90126,37.55592,16">망원동 주택가
+    <small>주거지 — 건물 윤곽/지번 비교</small></button>
+  <button class="preset" data-c="127.14889,35.81472,16">전주 한옥마을
+    <small>지방 도시 — OSM 데이터 빈약 정도</small></button>
+  <button class="preset" data-c="126.97797,37.65840,14">북한산
+    <small>등산로 — 의외로 OSM이 등산로는 충실</small></button>
+
+  <h2>같은 위치 다른 지도로 열기</h2>
+  <a class="ext kakao" id="kakaoLink" href="#" target="_blank">카카오맵에서 열기</a>
+  <a class="ext google" id="googleLink" href="#" target="_blank">구글맵에서 열기</a>
+  <a class="ext osm" id="osmLink" href="#" target="_blank">OSM 원본(래스터)에서 열기</a>
+
+  <div id="coords"></div>
+  <div class="hint">
+    💡 카카오맵 링크는 줌 레벨까지는 못 맞춰서 위치만 동기화됩니다.
+    열린 후 비슷한 줌으로 맞춰서 비교하세요.
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"
+        integrity="sha384-SYKAG6cglRMN0RVvhNeBY0r3FYKNOJtznwA0v7B5Vp9tr31xAHsZC0DqkQ/pZDmj" crossorigin="anonymous"></script>
+<script>
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://tiles.openfreemap.org/styles/liberty',
+    center: [127.02761, 37.49794], // 강남역
+    zoom: 16,
+  });
+  map.addControl(new maplibregl.NavigationControl());
+
+  function updateLinks() {
+    const c = map.getCenter();
+    const z = Math.round(map.getZoom());
+    const lat = c.lat.toFixed(5), lng = c.lng.toFixed(5);
+    document.getElementById('kakaoLink').href =
+      `https://map.kakao.com/link/map/현재위치,${lat},${lng}`;
+    document.getElementById('googleLink').href =
+      `https://www.google.com/maps/@${lat},${lng},${z}z`;
+    document.getElementById('osmLink').href =
+      `https://www.openstreetmap.org/#map=${z}/${lat}/${lng}`;
+    document.getElementById('coords').textContent = `중심: ${lat}, ${lng} / 줌: ${z}`;
+  }
+  map.on('moveend', updateLinks);
+  map.on('load', updateLinks);
+
+  document.querySelectorAll('button.preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const [lng, lat, zoom] = btn.dataset.c.split(',').map(Number);
+      map.flyTo({ center: [lng, lat], zoom });
+    });
+  });
+</script>
+</body>
+</html>
