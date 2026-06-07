@@ -8,6 +8,7 @@ import {
   MIN_STOPS,
   MAX_STOPS,
 } from './routeValidate.js';
+import { MIN_EXTRA_MINUTES, MAX_EXTRA_MINUTES } from '@wayfinder/shared';
 
 const VALID_STOP = { lat: 37.5, lng: 127.0 };
 function stops(n: number) {
@@ -74,6 +75,77 @@ describe('validateRouteBody', () => {
   it('body가 객체 아님 → 실패', () => {
     expect(validateRouteBody(null).ok).toBe(false);
     expect(validateRouteBody('x').ok).toBe(false);
+  });
+});
+
+describe('validateRouteBody — P4 preference·maxExtraMinutes (OW2)', () => {
+  it('preference 미지정 → ok, request에 preference 없음 (하위호환)', () => {
+    const r = validateRouteBody({ stops: stops(2), mode: 'walk' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.request.preference).toBeUndefined();
+  });
+
+  it('5개 유효 프로필(scenic 포함) 전부 통과 + request에 스레딩', () => {
+    for (const preference of ['fastest', 'walkable', 'safe', 'quiet', 'scenic']) {
+      const r = validateRouteBody({ stops: stops(2), mode: 'walk', preference });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.request.preference).toBe(preference);
+    }
+  });
+
+  it('알 수 없는 preference → 실패', () => {
+    expect(validateRouteBody({ stops: stops(2), mode: 'walk', preference: 'turbo' }).ok).toBe(false);
+  });
+
+  it('preference가 문자열 아님 → 실패', () => {
+    expect(validateRouteBody({ stops: stops(2), mode: 'walk', preference: 3 }).ok).toBe(false);
+  });
+
+  it('maxExtraMinutes 미지정 → ok, request에 없음 (무제한)', () => {
+    const r = validateRouteBody({ stops: stops(2), mode: 'walk', preference: 'safe' });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.request.maxExtraMinutes).toBeUndefined();
+  });
+
+  it('maxExtraMinutes 범위 내 → ok + 스레딩', () => {
+    const r = validateRouteBody({
+      stops: stops(2),
+      mode: 'walk',
+      preference: 'walkable',
+      maxExtraMinutes: 10,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.request.preference).toBe('walkable');
+      expect(r.request.maxExtraMinutes).toBe(10);
+    }
+  });
+
+  it('경계: MIN_EXTRA_MINUTES·MAX_EXTRA_MINUTES 양 끝 → ok', () => {
+    expect(
+      validateRouteBody({ stops: stops(2), mode: 'walk', maxExtraMinutes: MIN_EXTRA_MINUTES }).ok,
+    ).toBe(true);
+    expect(
+      validateRouteBody({ stops: stops(2), mode: 'walk', maxExtraMinutes: MAX_EXTRA_MINUTES }).ok,
+    ).toBe(true);
+  });
+
+  it('maxExtraMinutes < MIN(음수) → 실패', () => {
+    expect(
+      validateRouteBody({ stops: stops(2), mode: 'walk', maxExtraMinutes: MIN_EXTRA_MINUTES - 1 }).ok,
+    ).toBe(false);
+  });
+
+  it('maxExtraMinutes > MAX → 실패', () => {
+    expect(
+      validateRouteBody({ stops: stops(2), mode: 'walk', maxExtraMinutes: MAX_EXTRA_MINUTES + 1 }).ok,
+    ).toBe(false);
+  });
+
+  it('maxExtraMinutes가 숫자 아님/비유한 → 실패', () => {
+    expect(validateRouteBody({ stops: stops(2), mode: 'walk', maxExtraMinutes: '10' }).ok).toBe(false);
+    expect(validateRouteBody({ stops: stops(2), mode: 'walk', maxExtraMinutes: NaN }).ok).toBe(false);
+    expect(validateRouteBody({ stops: stops(2), mode: 'walk', maxExtraMinutes: Infinity }).ok).toBe(false);
   });
 });
 
