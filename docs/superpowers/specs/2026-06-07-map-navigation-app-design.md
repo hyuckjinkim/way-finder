@@ -25,7 +25,7 @@
 | 단계 | 내용 | 결과물 |
 |------|------|--------|
 | Phase 1 | 지도 표시 + 장소 검색 + 현재 위치 + 장소 상세(리뷰·블로그·거리뷰) | 동작하는 지도 앱 |
-| Phase 2 | A→B 길찾기 조회+표시 (도보/대중교통/차/자전거) | 경로 조회 |
+| Phase 2 | A→B→…→Z 길찾기 조회+표시 (도보/대중교통/차/자전거, **전 모드 경유지 지원**, 시외 KTX·기차·고속버스 포함) | 경로 조회 |
 | Phase 3 | 도보 턴바이턴 네비게이션 (GPS 추적, 이탈 재탐색) | 따라가는 네비 |
 | Phase 4 | 자체 라우팅 엔진(Valhalla) + 커스텀 경로 + "+N분" 필터 | 차별화 기능 |
 | Phase 5 | 전 모드 턴바이턴 + 음성 안내 + 실시간 교통 | 풀 네비게이션 |
@@ -39,7 +39,7 @@ Phase별로 별도의 구현 계획을 수립한다. 이 문서의 구현 범위
 |------|------|------|
 | 프레임워크 | Expo (React Native + TypeScript) | JS/React 경험, Mac 없이 iOS 빌드(EAS), 웹 확인(react-native-web) |
 | 지도 렌더링 | **하이브리드**: 한국=Kakao SDK, 글로벌=MapLibre | 한국 지도 품질(POI·건물·라벨)이 OSM 대비 압도적 — PoC(poc/map-compare)로 비교 확인 후 결정 |
-| 라우팅 API | 한국=카카오 모빌리티+ODsay, 글로벌=Google Routes/Mapbox | 한국 대중교통은 국내 API 필수 (구글 길찾기 자동차 미지원) |
+| 라우팅 API | 한국=카카오 모빌리티(자동차)+TMAP(도보)+ODsay(대중교통·시외), 글로벌=Google Routes/Mapbox | 한국 대중교통은 국내 API 필수 (구글 길찾기 자동차 미지원). 카카오모빌리티는 도보 미제공 → TMAP 보행자 API 편입 |
 | 장소 정보 | 기본정보=카카오 Local, 평점·리뷰=구글 Places(5개), 블로그=네이버+카카오 검색 API, 전체 리뷰=딥링크 | 카카오·네이버 리뷰 본문은 공식 API 미제공. 크롤링은 약관 위반이라 배제 |
 | 백엔드 | Cloudflare Workers (Hono, TypeScript) | API 키 보호 필수(Phase 1부터), 무료 티어, 엣지 캐싱 |
 | 상태관리 | Zustand + TanStack Query | 경량 + API 캐싱 |
@@ -132,7 +132,7 @@ interface MapViewRef {
 GET /v1/places/search?q=&lat=&lng=          # 지역 따라 카카오/구글 라우팅
 GET /v1/places/:id?provider=kakao|google     # 기본정보+구글평점·리뷰+블로그 병합
 GET /v1/blogs?q=&region=kr                   # 네이버+카카오 블로그 병합
-GET /v1/routes?from=&to=&mode=               # Phase 2
+POST /v1/routes  { stops: LatLng[2..N], mode }   # Phase 2 — 경유지 포함 다구간 경로
 ```
 
 ### 운영 규칙
@@ -164,7 +164,42 @@ interface PlaceDetail extends Place {
 }
 ```
 
-## 8. Phase 1 화면 범위
+## 8. 길찾기 설계 (Phase 2 범위 확정)
+
+### 요구사항
+
+- 이동 수단: 도보 / 대중교통 / 자동차 / 자전거
+- 대중교통은 시내(버스·지하철) + **시외(KTX·기차·고속버스·항공)** 포함
+- **전 모드에서 경유지 지원**: A→B→…→Z (네이버맵식 경유지 추가·순서 변경 UI)
+- MVP 경유지 한도: **최대 5개** (공급자 공통 지원 범위. 네이버맵과 동일)
+
+### 모드별 공급자·경유지 구현 방식
+
+| 모드 | 한국 | 글로벌 | 경유지 방식 |
+|------|------|--------|------------|
+| 자동차 | 카카오모빌리티 다중경유지 API (`/v1/waypoints/directions`) | Google Routes (≤25) / Mapbox | **네이티브 지원** |
+| 도보 | TMAP 보행자 경로 API | Google Routes / Mapbox | 네이티브 지원, 미지원 구간은 leg-chaining |
+| 자전거 | TMAP/카카오 확인 후 결정 (Phase 2 계획 시) | Google Routes / Mapbox | 동상 |
+| 대중교통 | ODsay | Google Routes (transit) | **leg-chaining** (아래) |
+
+### 대중교통 경유지 = leg-chaining
+
+어떤 공급자도 대중교통 경유지를 API로 지원하지 않는다 (카카오맵·네이버맵 앱도 미지원).
+→ 프록시가 A→B, B→C, … 구간을 **독립 탐색 후 병합**: 총 소요시간 = Σ구간 + 환승 대기 버퍼.
+이는 기존 공급자 앱이 못 하는 기능이므로 차별화 포인트로 명시한다.
+
+### 시외 대중교통 스티칭
+
+ODsay 도시간 검색은 도시간 구간(예: 서울역→부산역)만 반환한다.
+→ 프록시가 3단 합성: `출발지→출발역/터미널 (시내 검색)` + `도시간 (KTX 등)` + `도착역→목적지 (시내 검색)`.
+글로벌은 Google transit이 단일 응답으로 처리.
+
+### 정규화 모델 영향
+
+`Route { legs: RouteLeg[] }` 구조가 이미 다구간 전제라 스키마 변경 없음.
+요청만 `{ stops: LatLng[], mode }`로 확장 (2개=단순 A→B, 3개 이상=경유지).
+
+## 9. Phase 1 화면 범위
 
 | 화면 | 내용 | 완료 기준 |
 |------|------|----------|
@@ -174,13 +209,13 @@ interface PlaceDetail extends Place {
 
 **길찾기는 Phase 1 범위 밖** (Phase 2).
 
-## 9. 테스트 전략
+## 10. 테스트 전략
 
 - 프록시: 정규화 함수 단위 테스트 + 엔드포인트 통합 테스트 (Vitest + Cloudflare 로컬 런타임)
 - 앱: 서비스 레이어 단위 테스트, 지도는 웹 수동 확인 → Android 에뮬레이터 검증
 - 외부 API 전부 모킹, 실 API 호출은 스모크 테스트로 분리
 
-## 10. 비용 구조
+## 11. 비용 구조
 
 개발~소규모 사용자 단계는 0원. 과금 노출 지점은 두 곳: 구글 API(사용자 증가 시), Phase 4 서버(고정비).
 
@@ -201,7 +236,7 @@ interface PlaceDetail extends Place {
 2. Lazy load — 장소 상세의 리뷰 섹션이 열릴 때만 구글 호출 (검색 단계 호출 금지)
 3. Google Cloud 월 예산 상한 + 알림 설정을 Phase 1 셋업 체크리스트에 포함
 
-## 11. 리스크
+## 12. 리스크
 
 | 리스크 | 대응 |
 |--------|------|
