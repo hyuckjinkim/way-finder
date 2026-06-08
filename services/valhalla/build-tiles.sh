@@ -20,8 +20,8 @@ set -euo pipefail
 
 # --- 설정 (env로 override 가능) ---
 DATA_DIR="${DATA_DIR:-$HOME/valhalla-tiles}"
-# 버전·다이제스트 핀 (재현성 — :latest 드리프트 방지). v3.7.0 라이브 검증 기준.
-VALHALLA_IMAGE="${VALHALLA_IMAGE:-ghcr.io/valhalla/valhalla:3.7.0@sha256:c19b052fa132474da719e0e931007cd3931f25c43890f88acf270ba837fdc89f}"
+# 다이제스트 핀 (재현성 — :latest 드리프트 방지). 라이브 검증 이미지(/status: 3.7.0-14e2c93a8).
+VALHALLA_IMAGE="${VALHALLA_IMAGE:-ghcr.io/valhalla/valhalla@sha256:5f79c72167100c9573d84a49eeff095eb703a17a32a5abd7503fdf6982b47c70}"
 OSMIUM_IMAGE="${OSMIUM_IMAGE:-iboates/osmium:latest}"
 MEM_LIMIT="${MEM_LIMIT:-4g}"
 CONCURRENCY="${CONCURRENCY:-1}"

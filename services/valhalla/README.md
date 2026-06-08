@@ -16,10 +16,10 @@
 bash services/valhalla/build-tiles.sh
 
 # 2) 서빙 (빌드된 타일을 valhalla_service로). 포트 8002.
-# 이미지는 버전·다이제스트 핀 (재현성 — :latest 드리프트 방지). v3.7.0 라이브 검증 기준.
+# 이미지는 다이제스트 핀 (재현성 — :latest 드리프트 방지). 라이브 검증 이미지(/status: 3.7.0-14e2c93a8).
 docker run -d --name wayfinder-valhalla --memory=4g -p 8002:8002 \
   -v ~/valhalla-tiles:/data \
-  ghcr.io/valhalla/valhalla:3.7.0@sha256:c19b052fa132474da719e0e931007cd3931f25c43890f88acf270ba837fdc89f \
+  ghcr.io/valhalla/valhalla@sha256:5f79c72167100c9573d84a49eeff095eb703a17a32a5abd7503fdf6982b47c70 \
   valhalla_service /data/valhalla.json 1
 
 # 3) 헬스 확인
