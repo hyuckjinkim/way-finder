@@ -9,6 +9,7 @@
  */
 import type { LatLng, TravelMode } from '@wayfinder/shared';
 import type { Route, RouteLeg } from '@wayfinder/shared';
+import { pairsToCoords } from './_shared/coords.js';
 
 interface TmapGeometry {
   type?: string;
@@ -26,16 +27,10 @@ export interface TmapGeoJsonRaw {
   features?: TmapFeature[];
 }
 
-/** GeoJSON [lng,lat] 쌍 배열 → LatLng[]. */
-function lineStringToCoords(coordinates: number[][]): LatLng[] {
-  return coordinates
-    .filter((pair) => pair.length >= 2)
-    .map((pair) => ({ lng: pair[0]!, lat: pair[1]! }));
-}
-
 /**
  * TMAP GeoJSON 응답 → 단일 leg Route. mode로 leg.mode 결정 (도보/자전거 공용).
  * LineString feature들을 순서대로 이어 coords를, Point feature의 total*로 합계를 구성.
+ * GeoJSON [lng,lat] 쌍 → LatLng는 `_shared` 통합 매퍼 사용 (F2).
  */
 export function normalizeTmapGeoJson(raw: TmapGeoJsonRaw, mode: TravelMode): Route {
   const features = raw.features ?? [];
@@ -48,7 +43,7 @@ export function normalizeTmapGeoJson(raw: TmapGeoJsonRaw, mode: TravelMode): Rou
   for (const feature of features) {
     const geom = feature.geometry;
     if (geom?.type === 'LineString' && Array.isArray(geom.coordinates)) {
-      coords.push(...lineStringToCoords(geom.coordinates as number[][]));
+      coords.push(...pairsToCoords(geom.coordinates as number[][]));
     }
     const props = feature.properties;
     if (props?.totalDistance !== undefined) totalDistance = props.totalDistance;

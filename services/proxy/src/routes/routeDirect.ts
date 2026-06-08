@@ -11,12 +11,18 @@
  *   4. 실 모드 → 지역·모드별 공급자 fetch → 정규화. 실패 시 명시적 502 (silent 금지).
  */
 import type { Context } from 'hono';
-import type { Route, RouteRequest, TravelMode } from '@wayfinder/shared';
+import type {
+  Route,
+  RouteRequest,
+  TravelMode,
+  PedestrianCostingOptions,
+} from '@wayfinder/shared';
 import { routeRegion } from '@wayfinder/shared/region';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import type { Env } from '../config.js';
-import { isRouteDemoMode } from '../config.js';
+import { isRouteDemoMode, isValhallaCustomRoute } from '../config.js';
 import { validateRouteBody, runProviderOrError } from './routeValidate.js';
+import { resolveValhallaCustomRoute } from './valhallaProvider.js';
 import {
   normalizeKakaoMobility,
   type KakaoMobilityRaw,
@@ -42,6 +48,22 @@ const GOOGLE_TRAVEL_MODE: Record<'walk' | 'car' | 'bike', string> = {
   car: 'DRIVE',
   bike: 'BICYCLE',
 };
+
+/**
+ * Valhalla 커스텀 경로 공급자 인터페이스 (P4 §3 F1.5 — F1 단일 진실 소스).
+ *
+ * OW1(valhallaProvider.ts)이 구현하고, OO1(extraMinutesFilter)은 이 인터페이스를
+ * mock 주입해 A lane 구현 대기 없이 병렬 작성한다. F1은 인터페이스 + 배선 슬롯만
+ * 정의하며, 실 구현은 스트림 A/O가 채운다(Foundation 단계에선 미배선 stub).
+ */
+export interface ValhallaProvider {
+  /**
+   * stops + costing 옵션 → 정규화된 Route.
+   * @param req     RouteRequest (preference·maxExtraMinutes 포함)
+   * @param costing 프로필별 pedestrian costing 옵션 (PROFILE_COSTING 매핑값)
+   */
+  route(req: RouteRequest, costing: PedestrianCostingOptions): Promise<Route>;
+}
 
 /** stops → 카카오모빌리티 body (x=lng, y=lat). 경유지는 waypoints. */
 function kakaoBody(req: RouteRequest): unknown {
@@ -174,6 +196,17 @@ export async function handleDirectRoute(
   if (isRouteDemoMode(c.env, region)) {
     const route = await mockRouteProvider.getRoute(result.request);
     return c.json(route);
+  }
+
+  // P4 커스텀 경로 슬롯 (F1 — kr+walk+preference). OW1이 valhallaProvider.ts의
+  // resolveValhallaCustomRoute(provider + extraMinutesFilter)로 배선. OW2 검증이
+  // preference를 통과시켜 활성. 실패 시 null → 기존 TMAP 도보 폴백. 4모드 불가침.
+  if (
+    isValhallaCustomRoute(region, mode, result.request.preference)
+  ) {
+    const custom = await resolveValhallaCustomRoute(result.request, c.env);
+    if (custom !== null) return c.json(custom);
+    // 슬롯 실패(컨테이너 다운 등) → 기존 TMAP 도보로 폴백(F1 폴백 규약, silent 금지 아님).
   }
 
   // 실 모드 — 지역·모드별 공급자. 실패 격리(silent 금지) → 502.

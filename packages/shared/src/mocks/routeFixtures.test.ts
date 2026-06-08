@@ -125,3 +125,52 @@ describe('mockRouteProvider.getRoute — 4모드 + 경유지 + 시외', () => {
     ).toBe(INTERCITY_STITCH);
   });
 });
+
+describe('mockRouteProvider — customMeta 합성 (P4 F2.5 데모 예산 플래그)', () => {
+  const { SEOUL_A, SEOUL_C } = ROUTE_FIXTURE_COORDS;
+
+  async function walk(
+    preference?: RouteRequest['preference'],
+    maxExtraMinutes?: number,
+  ): Promise<Route> {
+    return mockRouteProvider.getRoute({
+      mode: 'walk',
+      stops: [SEOUL_A, SEOUL_C],
+      preference,
+      maxExtraMinutes,
+    });
+  }
+
+  it('preference 미지정/fastest → customMeta 없음 (하위호환, 픽스처 identity)', async () => {
+    expect((await walk(undefined)).customMeta).toBeUndefined();
+    expect(await walk(undefined)).toBe(WALK_SIMPLE);
+    expect((await walk('fastest')).customMeta).toBeUndefined();
+    expect(await walk('fastest')).toBe(WALK_SIMPLE);
+  });
+
+  it('walkable + 넉넉한 N → withinBudget true, baseline 채움', async () => {
+    const r = await walk('walkable', 10);
+    expect(r.customMeta).toBeDefined();
+    expect(r.customMeta!.preference).toBe('walkable');
+    expect(r.customMeta!.withinBudget).toBe(true);
+    expect(r.customMeta!.baselineDurationSec).toBe(WALK_SIMPLE.totalDurationSec);
+    // 원본 픽스처 불변(immutability) — 새 객체로 복사.
+    expect(WALK_SIMPLE.customMeta).toBeUndefined();
+  });
+
+  it('safe + 작은 N(2분) → withinBudget false (합성 추가 8분 > 2)', async () => {
+    const r = await walk('safe', 2);
+    expect(r.customMeta!.withinBudget).toBe(false);
+  });
+
+  it('scenic → 큰 합성값으로 예산 초과 가시화 (costing 미지원 ❌)', async () => {
+    const r = await walk('scenic', 10);
+    expect(r.customMeta!.preference).toBe('scenic');
+    expect(r.customMeta!.withinBudget).toBe(false);
+  });
+
+  it('N 미지정(무제한) → 어떤 프로필도 withinBudget true', async () => {
+    expect((await walk('safe')).customMeta!.withinBudget).toBe(true);
+    expect((await walk('scenic')).customMeta!.withinBudget).toBe(true);
+  });
+});

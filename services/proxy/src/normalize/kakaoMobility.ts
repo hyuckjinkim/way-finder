@@ -9,6 +9,7 @@
  */
 import type { LatLng } from '@wayfinder/shared';
 import type { Route, RouteLeg } from '@wayfinder/shared';
+import { flatPairsToCoords } from './_shared/coords.js';
 
 interface KakaoRoad {
   vertexes?: number[];
@@ -27,19 +28,10 @@ export interface KakaoMobilityRaw {
   routes?: KakaoRoute[];
 }
 
-/** [lng,lat,lng,lat,...] 평면 배열 → LatLng[]. 홀수 길이는 마지막 요소 무시. */
-function flatVertexesToCoords(vertexes: number[]): LatLng[] {
-  const coords: LatLng[] = [];
-  for (let i = 0; i + 1 < vertexes.length; i += 2) {
-    coords.push({ lng: vertexes[i]!, lat: vertexes[i + 1]! });
-  }
-  return coords;
-}
-
-/** 한 section의 모든 road vertexes를 이어 coords 구성. */
+/** 한 section의 모든 road vertexes를 이어 coords 구성 (F2 통합 평면 매퍼). */
 function sectionCoords(section: KakaoSection): LatLng[] {
   return (section.roads ?? []).flatMap((road) =>
-    flatVertexesToCoords(road.vertexes ?? []),
+    flatPairsToCoords(road.vertexes ?? []),
   );
 }
 

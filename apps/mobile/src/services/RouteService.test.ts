@@ -8,6 +8,9 @@
  * 와이어 테스트(critic C3): apiClient 모듈을 vi.mock으로 격리해 isDemoMode를 제어하고,
  * apiPost 스파이가 `routesPath` 상수(shared import)와 동일한 첫 인자로 호출됨을 단언한다.
  * 리터럴 하드코딩이 있으면 이 테스트가 실패한다.
+ *
+ * C1(P4): preference·maxExtraMinutes 전달 단언 — 드리프트 방지.
+ * RouteService.ts는 req 전체를 그대로 전달하므로 필드가 body에 통과되어야 한다.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Mock } from 'vitest';
@@ -144,5 +147,85 @@ describe('RouteService — 실 모드 (apiPost 스파이)', () => {
     const { getRoute } = await import('./RouteService.js');
 
     await expect(getRoute(WALK_REQ)).rejects.toThrow('API error 500');
+  });
+});
+
+// ─── C1(P4): preference·maxExtraMinutes 전달 단언 ─────────────────────────────
+// routesPath 상수 와이어 테스트(위)의 보완 — 확장 필드가 apiPost body에 그대로
+// 통과되는지 개별 필드 단언. 미래에 getRoute가 req를 재구성할 때 드리프트를 잡는다.
+
+describe('RouteService — C1(P4) preference·maxExtraMinutes 전달 (와이어 테스트)', () => {
+  const MOCK_ROUTE = {
+    legs: [
+      {
+        start: SEOUL_A,
+        end: SEOUL_C,
+        mode: 'walk' as const,
+        durationSec: 900,
+        distanceM: 1100,
+        coords: [SEOUL_A, SEOUL_C],
+      },
+    ],
+    totalDurationSec: 900,
+    totalDistanceM: 1100,
+  };
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.doMock('./apiClient.js', () => ({
+      isDemoMode: false,
+      apiPost: vi.fn().mockResolvedValue(MOCK_ROUTE),
+      apiFetch: vi.fn(),
+    }));
+  });
+
+  it('preference 필드가 apiPost body에 포함된다', async () => {
+    const { apiPost } = await import('./apiClient.js');
+    const { getRoute } = await import('./RouteService.js');
+    const req: RouteRequest = { stops: [SEOUL_A, SEOUL_C], mode: 'walk', preference: 'safe' };
+
+    await getRoute(req);
+
+    const body = (apiPost as Mock).mock.calls[0]?.[1] as RouteRequest;
+    expect(body.preference).toBe('safe');
+  });
+
+  it('maxExtraMinutes 필드가 apiPost body에 포함된다', async () => {
+    const { apiPost } = await import('./apiClient.js');
+    const { getRoute } = await import('./RouteService.js');
+    const req: RouteRequest = {
+      stops: [SEOUL_A, SEOUL_C],
+      mode: 'walk',
+      preference: 'walkable',
+      maxExtraMinutes: 10,
+    };
+
+    await getRoute(req);
+
+    const body = (apiPost as Mock).mock.calls[0]?.[1] as RouteRequest;
+    expect(body.preference).toBe('walkable');
+    expect(body.maxExtraMinutes).toBe(10);
+  });
+
+  it('preference 미지정 시 body에 undefined (하위호환)', async () => {
+    const { apiPost } = await import('./apiClient.js');
+    const { getRoute } = await import('./RouteService.js');
+
+    await getRoute(WALK_REQ);
+
+    const body = (apiPost as Mock).mock.calls[0]?.[1] as RouteRequest;
+    expect(body.preference).toBeUndefined();
+    expect(body.maxExtraMinutes).toBeUndefined();
+  });
+
+  it('routesPath 상수 — preference 있어도 첫 인자 불변', async () => {
+    const { apiPost } = await import('./apiClient.js');
+    const { getRoute } = await import('./RouteService.js');
+    const req: RouteRequest = { stops: [SEOUL_A, SEOUL_C], mode: 'walk', preference: 'quiet' };
+
+    await getRoute(req);
+
+    const firstArg = (apiPost as Mock).mock.calls[0]?.[0];
+    expect(firstArg).toBe(routesPath);
   });
 });

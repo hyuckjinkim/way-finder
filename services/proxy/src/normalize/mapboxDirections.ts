@@ -8,8 +8,9 @@
  *
  * mode 인자로 leg.mode 결정.
  */
-import type { LatLng, TravelMode } from '@wayfinder/shared';
+import type { TravelMode } from '@wayfinder/shared';
 import type { Route, RouteLeg } from '@wayfinder/shared';
+import { pairsToCoords } from './_shared/coords.js';
 
 interface MapboxLeg {
   distance?: number;
@@ -26,16 +27,10 @@ export interface MapboxRaw {
   routes?: MapboxRoute[];
 }
 
-/** GeoJSON [lng,lat] 쌍 배열 → LatLng[]. */
-function coordsFromGeometry(coordinates: number[][]): LatLng[] {
-  return coordinates
-    .filter((pair) => pair.length >= 2)
-    .map((pair) => ({ lng: pair[0]!, lat: pair[1]! }));
-}
-
 /**
  * Mapbox 응답 → Route. code != 'Ok' 또는 routes 없음 → throw (장애 격리는 핸들러 — A3).
  * 전체 geometry는 첫 leg에 싣는다 (leg별 분할 지오메트리 미제공).
+ * GeoJSON [lng,lat] 쌍 → LatLng는 `_shared` 통합 매퍼 사용 (F2).
  */
 export function normalizeMapboxDirections(raw: MapboxRaw, mode: TravelMode): Route {
   if (raw.code !== undefined && raw.code !== 'Ok') {
@@ -44,7 +39,7 @@ export function normalizeMapboxDirections(raw: MapboxRaw, mode: TravelMode): Rou
   const route = raw.routes?.[0];
   if (!route) throw new Error('mapbox: no route in response');
 
-  const fullCoords = coordsFromGeometry(route.geometry?.coordinates ?? []);
+  const fullCoords = pairsToCoords(route.geometry?.coordinates ?? []);
   const rawLegs = route.legs ?? [];
   if (rawLegs.length === 0) throw new Error('mapbox: no legs');
 

@@ -13,8 +13,9 @@
  * - polyline.encodedPolyline → @googlemaps/polyline-codec로 LatLng[] 디코드
  *   (디코드는 프록시 정규화 레이어에서 1회만 — 앱은 coords를 그대로 받음, §8 C1).
  */
-import { decode } from '@googlemaps/polyline-codec';
 import type { LatLng, RouteLeg, TransitMeta } from '@wayfinder/shared';
+import { parseDurationSec } from './_shared/duration.js';
+import { decodePolyline } from './_shared/polyline.js';
 
 /** Google Routes 폴리라인 컨테이너. */
 export interface GooglePolyline {
@@ -59,24 +60,6 @@ export interface GoogleRoutesResponse {
   }[];
 }
 
-/** '123s' 문자열 → 초(number). 누락/형식이상 시 0. */
-function parseDurationSec(d: string | undefined): number {
-  if (!d) return 0;
-  const m = /^(\d+(?:\.\d+)?)s$/.exec(d.trim());
-  return m ? Math.round(parseFloat(m[1]!)) : 0;
-}
-
-/**
- * encodedPolyline → LatLng[]. 누락이면 빈 배열, 디코드 실패는 throw.
- * (googleRoutes.ts와 동일 정책 — 디코드 에러를 삼키지 않고 장애 격리 미들웨어가
- *  명시적 502로 처리하게 한다. 워커 간 디코드 에러 정책 일관성.)
- */
-function decodePolyline(poly: GooglePolyline | undefined): LatLng[] {
-  const enc = poly?.encodedPolyline;
-  if (!enc) return [];
-  return decode(enc, 5).map(([lat, lng]) => ({ lat, lng }));
-}
-
 /** Google vehicle.type → 시내/도시간 lineType ('air'는 절대 생성 안 함). */
 function vehicleType(type: string | undefined): TransitMeta['lineType'] {
   switch (type) {
@@ -111,7 +94,8 @@ function endpoints(coords: LatLng[]): { start: LatLng; end: LatLng } {
 
 /** step 한 건 → RouteLeg. */
 function stepToLeg(step: GoogleRouteStep): RouteLeg {
-  const coords = decodePolyline(step.polyline);
+  // Google polyline은 precision 5 (F2 통합 디코더).
+  const coords = decodePolyline(step.polyline?.encodedPolyline, 5);
   const { start, end } = endpoints(coords);
   const durationSec = parseDurationSec(step.duration ?? step.staticDuration);
   const distanceM = step.distanceMeters ?? 0;

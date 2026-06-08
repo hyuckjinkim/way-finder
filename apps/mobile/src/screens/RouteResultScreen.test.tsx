@@ -7,6 +7,9 @@
  *
  * renderToStaticMarkup은 useEffect를 실행하지 않으므로 fitBounds 호출은 이 테스트 범위 외.
  * boundsForRoute의 BBox 계산은 routeToPolylines.test.ts에서 별도로 단언한다.
+ *
+ * C3(P4): customMeta 표시 단언 — 선호 프로필 라벨 + 예산 내/초과 플래그.
+ * customMeta 미존재(기존 P2 경로) 시 미표시 하위호환 단언 포함.
  */
 import { describe, it, expect } from 'vitest';
 import React from 'react';
@@ -108,5 +111,83 @@ describe('RouteResultScreen — 요약 표시 정확성', () => {
       <RouteResultScreen route={WALK_SIMPLE} onBack={() => {}} />,
     );
     expect(html).not.toContain('환승');
+  });
+});
+
+// ─── C3(P4): customMeta 표시 ──────────────────────────────────────────────────
+
+describe('RouteResultScreen — C3(P4) customMeta 프로필·예산 표시', () => {
+  it('customMeta 없으면 예산 표시 미존재 (하위호환 — 기존 P2 경로)', () => {
+    // WALK_SIMPLE은 customMeta 없음
+    const html = render(
+      <RouteResultScreen route={WALK_SIMPLE} onBack={() => {}} />,
+    );
+    expect(html).not.toContain('예산 내');
+    expect(html).not.toContain('예산 초과');
+  });
+
+  it('withinBudget=true → "예산 내" 표시, 프로필 라벨 표시', () => {
+    const route = {
+      ...WALK_SIMPLE,
+      customMeta: { preference: 'safe' as const, withinBudget: true },
+    };
+    const html = render(<RouteResultScreen route={route} onBack={() => {}} />);
+    expect(html).toContain('예산 내');
+    expect(html).toContain('안전');
+    expect(html).not.toContain('예산 초과');
+  });
+
+  it('withinBudget=false → "예산 초과" 표시, 프로필 라벨 표시', () => {
+    const route = {
+      ...WALK_SIMPLE,
+      customMeta: { preference: 'scenic' as const, withinBudget: false },
+    };
+    const html = render(<RouteResultScreen route={route} onBack={() => {}} />);
+    expect(html).toContain('예산 초과');
+    expect(html).toContain('풍경');
+    expect(html).not.toContain('예산 내');
+  });
+
+  it('walkable 프로필 — "걷기좋은" 라벨 표시', () => {
+    const route = {
+      ...WALK_SIMPLE,
+      customMeta: { preference: 'walkable' as const, withinBudget: true },
+    };
+    const html = render(<RouteResultScreen route={route} onBack={() => {}} />);
+    expect(html).toContain('걷기좋은');
+    expect(html).toContain('예산 내');
+  });
+
+  it('quiet 프로필 — "한적" 라벨 표시', () => {
+    const route = {
+      ...WALK_SIMPLE,
+      customMeta: { preference: 'quiet' as const, withinBudget: true },
+    };
+    const html = render(<RouteResultScreen route={route} onBack={() => {}} />);
+    expect(html).toContain('한적');
+  });
+
+  it('baselineDurationSec 있어도 렌더 정상 (선택 필드)', () => {
+    const route = {
+      ...WALK_SIMPLE,
+      customMeta: {
+        preference: 'safe' as const,
+        withinBudget: true,
+        baselineDurationSec: 800,
+      },
+    };
+    const html = render(<RouteResultScreen route={route} onBack={() => {}} />);
+    expect(html.length).toBeGreaterThan(0);
+    expect(html).toContain('예산 내');
+  });
+
+  it('customMeta 있어도 기존 시간·거리 표시 불변', () => {
+    const route = {
+      ...WALK_SIMPLE,
+      customMeta: { preference: 'safe' as const, withinBudget: true },
+    };
+    const html = render(<RouteResultScreen route={route} onBack={() => {}} />);
+    // WALK_SIMPLE: 900초 = 15분
+    expect(html).toContain('15분');
   });
 });

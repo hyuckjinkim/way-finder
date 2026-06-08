@@ -14,15 +14,26 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useRef, useEffect, useState } from 'react';
-import type { LatLng, Route, TravelMode } from '@wayfinder/shared';
+import type { LatLng, Route, RoutePreference, TravelMode } from '@wayfinder/shared';
 import { getRoute } from '../services/RouteService.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
 
 // ─── 캐시 키 팩토리 ────────────────────────────────────────────────────────────
 
 export const routeQueryKeys = {
-  route: (stops: LatLng[], mode: TravelMode) =>
-    ['route', mode, stops.map((s) => `${s.lat},${s.lng}`).join('|')] as const,
+  route: (
+    stops: LatLng[],
+    mode: TravelMode,
+    preference?: RoutePreference,
+    maxExtraMinutes?: number,
+  ) =>
+    [
+      'route',
+      mode,
+      stops.map((s) => `${s.lat},${s.lng}`).join('|'),
+      preference ?? 'fastest',
+      maxExtraMinutes ?? 'unlimited',
+    ] as const,
 } as const;
 
 // ─── queryOptions 팩토리 (렌더러 없이 테스트 가능) ─────────────────────────────
@@ -30,14 +41,17 @@ export const routeQueryKeys = {
 /**
  * 경로 탐색 queryOptions.
  * stops.length >= 2 일 때만 enabled — 출발/도착 모두 있을 때만 탐색.
+ * P4 D1: preference·maxExtraMinutes가 캐시 키 + queryFn body에 포함된다.
  */
 export function routeQueryOptions(
   stops: LatLng[],
   mode: TravelMode,
+  preference?: RoutePreference,
+  maxExtraMinutes?: number,
 ): UseQueryOptions<Route, Error> {
   return {
-    queryKey: routeQueryKeys.route(stops, mode),
-    queryFn: () => getRoute({ stops, mode }),
+    queryKey: routeQueryKeys.route(stops, mode, preference, maxExtraMinutes),
+    queryFn: () => getRoute({ stops, mode, preference, maxExtraMinutes }),
     enabled: stops.length >= 2,
     staleTime: 60_000, // 1분
   };
@@ -101,14 +115,20 @@ export function useDebounced<T>(value: T, delayMs: number): T {
 // ─── React Query 훅 ────────────────────────────────────────────────────────────
 
 /**
- * stops + mode로 경로를 탐색한다.
+ * stops + mode(+ P4 preference·maxExtraMinutes)로 경로를 탐색한다.
  * 경유지 편집 중 연속 호출을 `ROUTE_DEBOUNCE_MS` 디바운스로 억제한다.
  */
 export function useRouteQuery(
   stops: LatLng[],
   mode: TravelMode,
+  preference?: RoutePreference,
+  maxExtraMinutes?: number,
 ): UseQueryResult<Route, Error> {
   const debouncedStops = useDebounced(stops, ROUTE_DEBOUNCE_MS);
   const debouncedMode = useDebounced(mode, ROUTE_DEBOUNCE_MS);
-  return useQuery(routeQueryOptions(debouncedStops, debouncedMode));
+  const debouncedPreference = useDebounced(preference, ROUTE_DEBOUNCE_MS);
+  const debouncedMaxExtraMinutes = useDebounced(maxExtraMinutes, ROUTE_DEBOUNCE_MS);
+  return useQuery(
+    routeQueryOptions(debouncedStops, debouncedMode, debouncedPreference, debouncedMaxExtraMinutes),
+  );
 }

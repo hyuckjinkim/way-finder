@@ -9,10 +9,19 @@
  */
 import React, { useRef, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
-import type { Route, MapViewRef } from '@wayfinder/shared';
+import type { Route, MapViewRef, RoutePreference } from '@wayfinder/shared';
 import MapView from '../map/MapView';
 import { routeToPolylines, boundsForRoute } from '../route/routeToPolylines.js';
 import { routeSummary } from '../route/routeSummary.js';
+
+/** 선호 프로필 → 한국어 라벨 (C3 로컬 맵 — B1 routePreference.ts import 금지). */
+const PREFERENCE_LABEL: Record<RoutePreference, string> = {
+  fastest: '빠른',
+  walkable: '걷기좋은',
+  safe: '안전',
+  quiet: '한적',
+  scenic: '풍경',
+};
 
 export interface RouteResultScreenProps {
   /** 표시할 경로. null이면 로딩/빈 상태 표시. */
@@ -113,6 +122,24 @@ export function RouteResultScreen({
                 ))}
               </View>
             )}
+
+            {/* 커스텀 경로 메타 — 선호 프로필 + 예산 플래그 (C3 P4). fastest/미존재 시 미표시(하위호환). */}
+            {summary.customMeta && (
+              <View style={styles.customMetaRow}>
+                <Text style={styles.customMetaProfile}>
+                  {PREFERENCE_LABEL[summary.customMeta.preference]}
+                </Text>
+                <Text
+                  style={
+                    summary.customMeta.withinBudget
+                      ? styles.withinBudget
+                      : styles.overBudget
+                  }
+                >
+                  {summary.customMeta.withinBudget ? '예산 내' : '예산 초과'}
+                </Text>
+              </View>
+            )}
           </ScrollView>
         ) : (
           <Text style={styles.emptyText}>경로를 탐색 중입니다…</Text>
@@ -184,4 +211,13 @@ const styles = StyleSheet.create({
   },
   lineTagText: { fontSize: 12, color: '#3949AB' },
   emptyText: { fontSize: 14, color: '#999', textAlign: 'center' },
+  customMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  customMetaProfile: { fontSize: 13, color: '#555', fontWeight: '600' },
+  withinBudget: { fontSize: 13, color: '#2e7d32' },
+  overBudget: { fontSize: 13, color: '#c62828' },
 });

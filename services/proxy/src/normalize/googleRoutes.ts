@@ -9,9 +9,10 @@
  *
  * mode 인자로 leg.mode 결정 (travelMode와 무관하게 요청 모드를 신뢰).
  */
-import { decode } from '@googlemaps/polyline-codec';
-import type { LatLng, TravelMode } from '@wayfinder/shared';
+import type { TravelMode } from '@wayfinder/shared';
 import type { Route, RouteLeg } from '@wayfinder/shared';
+import { parseDurationSec } from './_shared/duration.js';
+import { decodePolyline } from './_shared/polyline.js';
 
 interface GoogleLeg {
   distanceMeters?: number;
@@ -28,22 +29,11 @@ export interface GoogleRoutesRaw {
   routes?: GoogleRoute[];
 }
 
-/** `'123s'` → 123. 파싱 실패 시 0. */
-function parseDurationSec(duration: string | undefined): number {
-  if (!duration) return 0;
-  const n = parseInt(duration.replace(/s$/, ''), 10);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** encoded polyline → LatLng[]. decode는 [lat,lng] 튜플을 반환. */
-function decodePolyline(encoded: string | undefined): LatLng[] {
-  if (!encoded) return [];
-  return decode(encoded, 5).map(([lat, lng]) => ({ lat, lng }));
-}
-
 /**
  * Google Routes 응답 → Route. routes[0]의 legs를 RouteLeg로 매핑.
  * routes 없음 → throw (장애 격리는 핸들러 — A3).
+ *
+ * duration·polyline 디코드는 `_shared` 통합 유틸 사용 (F2). Google polyline은 precision 5.
  */
 export function normalizeGoogleRoutes(raw: GoogleRoutesRaw, mode: TravelMode): Route {
   const route = raw.routes?.[0];
@@ -53,7 +43,7 @@ export function normalizeGoogleRoutes(raw: GoogleRoutesRaw, mode: TravelMode): R
   if (rawLegs.length === 0) throw new Error('googleRoutes: no legs');
 
   const legs: RouteLeg[] = rawLegs.map((leg) => {
-    const coords = decodePolyline(leg.polyline?.encodedPolyline);
+    const coords = decodePolyline(leg.polyline?.encodedPolyline, 5);
     const start = coords[0] ?? { lat: 0, lng: 0 };
     const end = coords[coords.length - 1] ?? start;
     return {
