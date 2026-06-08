@@ -37,6 +37,10 @@ export default function RootLayout() {
             name="route/result"
             options={{ title: '경로 결과', headerShown: true }}
           />
+          <Stack.Screen
+            name="route/nav"
+            options={{ title: '네비게이션', headerShown: false }}
+          />
           </Stack>
         </SafeAreaProvider>
       </GestureHandlerRootView>
