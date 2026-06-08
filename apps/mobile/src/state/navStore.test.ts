@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { LatLng, LocationSample, Route, RouteRequest } from '@wayfinder/shared';
 import { REROUTE_DEBOUNCE_MS } from '@wayfinder/shared';
 import type { LocationProvider } from '../nav/locationProvider.js';
+import { createSyntheticVoiceGuide } from '../nav/voiceGuide.js';
 import { DEMO_ROUTE, DEMO_NAV_SEQUENCE } from '../nav/fixtures/gpsSequences.js';
 import { useNavStore } from './navStore.js';
 
@@ -213,5 +214,116 @@ describe('navStore — 세션 종료', () => {
     // 해지 후 표본은 무시(navState 재생성 안 됨).
     emit(onRoute(126.982));
     expect(useNavStore.getState().navState).toBeNull();
+  });
+});
+
+// ── U2: 음성↔step 전이 배선 (P5 §4 U2 작업 1) ────────────────────────────────
+//
+// 검증 핵심: 토글 on일 때 navMachine step 전이(activeStepIndex 변경) 시 VoiceGuide.speak가
+// navInstructionText(S1) 문장으로 호출되고, 동일 step은 재발화되지 않는다(S2 디바운스 백스톱).
+// mode가 활성 leg에서 도출됨도 단언(차량 어휘 — 하드코딩 아님). 합성 spy로 부수효과 0.
+//
+// DEMO_NAV_SEQUENCE(REFERENCE_PATH on-route 진행)와 동일 geometry의 **자동차** 경로를
+// 쓴다 — 진행이 step 앵커(인덱스 11·24)를 지나며 activeStepIndex가 전진해 발화가 트리거.
+
+/** DEMO_ROUTE와 동일 geometry의 자동차 경로 — 턴 카드용 instruction + 발화용 maneuver 양립. */
+const CAR_NAV_ROUTE: Route = {
+  legs: [
+    {
+      ...DEMO_ROUTE.legs[0]!,
+      mode: 'car',
+      steps: [
+        {
+          ...DEMO_ROUTE.legs[0]!.steps![0]!,
+          instruction: '세종대로20길로 좌회전하세요',
+          maneuver: 'turn-left',
+          distanceM: 300,
+        },
+        {
+          ...DEMO_ROUTE.legs[0]!.steps![1]!,
+          instruction: '청계천로로 우회전하세요',
+          maneuver: 'turn-right',
+          distanceM: 400,
+        },
+        {
+          ...DEMO_ROUTE.legs[0]!.steps![2]!,
+          instruction: '목적지에 도착했습니다',
+          maneuver: 'arrive',
+          distanceM: 0,
+        },
+      ],
+    },
+  ],
+  totalDurationSec: DEMO_ROUTE.totalDurationSec,
+  totalDistanceM: DEMO_ROUTE.totalDistanceM,
+};
+
+describe('navStore — U2 음성↔step 전이 배선', () => {
+  it('토글 on이면 step 전이마다 VoiceGuide.speak가 navInstructionText 문장으로 호출된다', () => {
+    const voice = createSyntheticVoiceGuide();
+    const { provider, emit } = manualProvider();
+    useNavStore.getState().startNav({
+      route: CAR_NAV_ROUTE,
+      baseRequest: { ...BASE_REQUEST, mode: 'car' },
+      provider,
+      getRoute: getRouteMock,
+      voiceGuide: voice,
+    });
+    useNavStore.getState().setVoiceEnabled(true);
+
+    // on-route 진행(step 앵커 11·24 통과) → activeStepIndex 전진 → 발화.
+    for (const s of DEMO_NAV_SEQUENCE.slice(0, 44)) emit(s);
+
+    // 차량 어휘 발화(거리 접두 포함) — mode가 leg에서 도출됨을 입증(하드코딩 아님).
+    expect(voice.spoken).toContain('400m 앞에서 우회전');
+    // 보행 어휘("오른쪽으로 이동")가 아니어야 함 — mode='car' 확인.
+    expect(voice.spoken).not.toContain('오른쪽으로 이동');
+  });
+
+  it('동일 step은 재발화하지 않는다 — 각 발화 문장이 유일(S2 디바운스 백스톱)', () => {
+    const voice = createSyntheticVoiceGuide();
+    const { provider, emit } = manualProvider();
+    useNavStore.getState().startNav({
+      route: CAR_NAV_ROUTE,
+      baseRequest: { ...BASE_REQUEST, mode: 'car' },
+      provider,
+      getRoute: getRouteMock,
+      voiceGuide: voice,
+    });
+    useNavStore.getState().setVoiceEnabled(true);
+
+    for (const s of DEMO_NAV_SEQUENCE.slice(0, 44)) emit(s);
+
+    // 발화된 문장에 중복 없음(동일 step이 여러 표본에 걸쳐도 한 번만).
+    expect(new Set(voice.spoken).size).toBe(voice.spoken.length);
+    expect(voice.spoken.length).toBeGreaterThan(0);
+  });
+
+  it('토글 off면 발화하지 않는다(게이트)', () => {
+    const voice = createSyntheticVoiceGuide();
+    const { provider, emit } = manualProvider();
+    useNavStore.getState().startNav({
+      route: CAR_NAV_ROUTE,
+      baseRequest: { ...BASE_REQUEST, mode: 'car' },
+      provider,
+      getRoute: getRouteMock,
+      voiceGuide: voice,
+    });
+    // setVoiceEnabled 미호출 — 기본 off.
+    for (const s of DEMO_NAV_SEQUENCE.slice(0, 44)) emit(s);
+    expect(voice.spoken).toHaveLength(0);
+  });
+
+  it('voiceGuide 미주입 시 무회귀 — step 전이가 발화 없이 정상 reduce된다', () => {
+    const { provider, emit } = manualProvider();
+    useNavStore.getState().startNav({
+      route: CAR_NAV_ROUTE,
+      baseRequest: { ...BASE_REQUEST, mode: 'car' },
+      provider,
+      getRoute: getRouteMock,
+    });
+    useNavStore.getState().setVoiceEnabled(true); // 게이트 on이어도 엔진 없으면 무해.
+    for (const s of DEMO_NAV_SEQUENCE.slice(0, 44)) emit(s);
+    expect(useNavStore.getState().navState?.status).toBe('navigating');
   });
 });

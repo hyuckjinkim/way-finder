@@ -23,6 +23,8 @@ import { useRouteStore } from '../../src/state/routeStore';
 import { useNavStore } from '../../src/state/navStore';
 import { createSyntheticLocationProvider } from '../../src/nav/locationProvider.js';
 import { createExpoLocationProvider } from '../../src/nav/locationProvider.expo.js';
+import { createSyntheticVoiceGuide } from '../../src/nav/voiceGuide.js';
+import { createVoiceGuide } from '../../src/nav/createVoiceGuide.js';
 import { DEMO_NAV_SEQUENCE, DEMO_ROUTE } from '../../src/nav/fixtures/gpsSequences.js';
 import { isDemoMode } from '../../src/services/apiClient.js';
 
@@ -39,6 +41,7 @@ export default function NavRoute() {
 
   const startNav = useNavStore((s) => s.startNav);
   const stopNav = useNavStore((s) => s.stopNav);
+  const setVoiceEnabled = useNavStore((s) => s.setVoiceEnabled);
   const navState = useNavStore((s) => s.navState);
   const sessionRoute = useNavStore((s) => s.activeRoute);
 
@@ -51,6 +54,9 @@ export default function NavRoute() {
     const provider = isDemoMode
       ? createSyntheticLocationProvider(DEMO_NAV_SEQUENCE, DEMO_CADENCE_MS)
       : createExpoLocationProvider();
+    // 음성: 데모=합성 spy(부수효과 0), 실 모드=expo impl(createVoiceGuide — 네이티브
+    // 팩토리, 웹은 .web 분기가 합성으로 격리해 expo-speech 웹 번들 미포함, P5 §6).
+    const voiceGuide = isDemoMode ? createSyntheticVoiceGuide() : createVoiceGuide();
     // 데모: 재탐색도 DEMO_ROUTE로 해소(동일 geometry·steps). 미주입 시 기본 getRoute는
     // routeStore.mode(기본 transit)로 steps 없는 TRANSIT_CHAIN을 반환해 데모가 비정합
     // 경로로 점프한다(이탈 후 디바운스 경과 시 재탐색 발사 — 합성 시퀀스 종료와 무관).
@@ -59,6 +65,7 @@ export default function NavRoute() {
       baseRequest,
       provider,
       getRoute: isDemoMode ? async () => DEMO_ROUTE : undefined,
+      voiceGuide,
     });
     return () => stopNav();
   }, [resultRoute, guidanceRoute, stops, mode, preference, maxExtraMinutes, startNav, stopNav]);
@@ -73,6 +80,7 @@ export default function NavRoute() {
       route={sessionRoute ?? guidanceRoute}
       navState={navState ?? initialFallback}
       onExit={onExit}
+      onToggleVoice={setVoiceEnabled}
     />
   );
 }
