@@ -58,6 +58,35 @@ export interface RouteCustomMeta {
 }
 
 /**
+ * 경로의 한 턴(maneuver) — 턴바이턴 네비의 단일 단위 (P3 §1).
+ *
+ * Valhalla `maneuvers[]` 정규화 산물(F2). 상태 머신의 "다음 턴까지 거리" 입력이
+ * 되려면 턴이 *어디서* 일어나는지(`location`) 알아야 한다 — 이것이 `location`을
+ * 필수로 두는 이유(advisor 핵심 지적). 디바이스 산물이 아니라 정규화 산물.
+ */
+export interface RouteStep {
+  /**
+   * 턴 시작 좌표 (필수). Valhalla `begin_shape_index` → 해당 leg `coords[index]`.
+   * "다음 턴까지 거리"(현재 위치 → 다음 step.location)의 입력.
+   */
+  location: LatLng;
+  /** 안내 문구 (예: "Turn left onto 무교로."). Valhalla `instruction`. */
+  instruction: string;
+  /**
+   * Valhalla maneuver type 코드. 주요 코드:
+   * 2=출발/직진 시작, 4=도착, 8=직진, 10=우회전, 15=좌회전.
+   * (전체 코드는 Valhalla turn-by-turn 문서 참조 — 정규화는 raw 코드를 보존한다.)
+   */
+  type: number;
+  /** 이 step 구간 거리(미터). Valhalla `length`(km) ×1000. 도착 step은 0. */
+  distanceM: number;
+  /** 도로명 (선택). Valhalla `street_names` — 도착·이름 없는 턴에는 부재. */
+  streetNames?: string[];
+  /** leg `coords` 인덱스 (선택). 정확 투영용 — `begin_shape_index` 원값 보존. */
+  shapeIndex?: number;
+}
+
+/**
  * 대중교통 leg 메타 (선택). 도보/차/자전거 leg는 사용하지 않는다.
  * `lineType: 'air'`는 ODsay 도시간 응답에서만 생성 — 다른 정규화기는 사용 금지.
  */
@@ -87,6 +116,13 @@ export interface RouteLeg {
   coords: LatLng[];
   /** 대중교통 leg 메타 (transit 모드 leg에만 존재). */
   transit?: TransitMeta;
+  /**
+   * 턴바이턴 step (P3, 선택). Valhalla maneuvers 보유 경로(커스텀 도보)만 부착 —
+   * 미존재=기존 동작(기존 5개 정규화기·P4 Valhalla 폴리라인 경로 불변, 무회귀).
+   * steps 있는 경로만 턴 안내 네비, 없는 경로는 폴리라인 추종 네비로 graceful degrade.
+   * (P4 `customMeta` 하위호환 패턴 그대로 — optional, 미존재 시 미부착.)
+   */
+  steps?: RouteStep[];
 }
 
 /**

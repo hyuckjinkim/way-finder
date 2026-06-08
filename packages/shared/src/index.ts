@@ -14,12 +14,19 @@ export type {
 export type {
   Route,
   RouteLeg,
+  RouteStep,
   RouteRequest,
   RouteCustomMeta,
   RoutePreference,
   TransitMeta,
   TravelMode,
 } from './types/route.js';
+export type {
+  LocationSample,
+  NavStatus,
+  NavState,
+  NavProgress,
+} from './types/nav.js';
 export {
   TRANSFER_BUFFER_SEC,
   MAX_WAYPOINTS,
@@ -30,6 +37,11 @@ export {
   PROFILE_COSTING,
 } from './constants/routing.js';
 export type { PedestrianCostingOptions } from './constants/routing.js';
+export {
+  OFF_ROUTE_THRESHOLD_M,
+  ARRIVAL_RADIUS_M,
+  REROUTE_DEBOUNCE_MS,
+} from './constants/nav.js';
 export type {
   MapViewProps,
   MapViewRef,

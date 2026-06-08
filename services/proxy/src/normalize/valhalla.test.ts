@@ -5,6 +5,7 @@
  * 매핑·km→m 변환·장애(빈 응답) 단언. precision 6 미사용 시 좌표가 한국 bbox 밖(10× 오차).
  */
 import { describe, it, expect } from 'vitest';
+import type { RouteLeg, RouteStep } from '@wayfinder/shared';
 import { normalizeValhalla, type ValhallaRouteRaw } from './valhalla.js';
 import {
   WALK_SIMPLE_RAW,
@@ -78,6 +79,51 @@ describe('normalizeValhalla — 프로필 (safeProfile)', () => {
     expect(route.legs[0]!.mode).toBe('walk');
     expect(route.legs[0]!.coords.length).toBeGreaterThan(1);
     expect(inKoreaMetro(route.legs[0]!.coords[0]!)).toBe(true);
+  });
+});
+
+describe('RouteLeg.steps 하위호환 스키마 (F1 — 정규화 레이어 증명)', () => {
+  // contract.test.ts가 아니라 여기서 스키마 하위호환을 증명한다(critic MINOR):
+  // contract는 경로 등록 전용이라 steps 스키마를 검증하지 않는다.
+
+  it('steps 미존재 RouteLeg가 타입 정합 (기존 5개 정규화기·P4 경로 불변)', () => {
+    const legWithoutSteps: RouteLeg = {
+      start: { lat: 37.5663, lng: 126.9779 },
+      end: { lat: 37.5704, lng: 126.9921 },
+      mode: 'walk',
+      durationSec: 100,
+      distanceM: 200,
+      coords: [
+        { lat: 37.5663, lng: 126.9779 },
+        { lat: 37.5704, lng: 126.9921 },
+      ],
+    };
+    expect(legWithoutSteps.steps).toBeUndefined();
+  });
+
+  it('steps 존재 RouteLeg가 타입 정합 (Valhalla 턴 경로)', () => {
+    const step: RouteStep = {
+      location: { lat: 37.5663, lng: 126.9779 },
+      instruction: 'Turn left onto 무교로.',
+      type: 15,
+      distanceM: 73,
+      streetNames: ['무교로'],
+      shapeIndex: 10,
+    };
+    const legWithSteps: RouteLeg = {
+      start: { lat: 37.5663, lng: 126.9779 },
+      end: { lat: 37.5704, lng: 126.9921 },
+      mode: 'walk',
+      durationSec: 100,
+      distanceM: 200,
+      coords: [
+        { lat: 37.5663, lng: 126.9779 },
+        { lat: 37.5704, lng: 126.9921 },
+      ],
+      steps: [step],
+    };
+    expect(legWithSteps.steps).toHaveLength(1);
+    expect(legWithSteps.steps![0]!.location).toEqual(step.location);
   });
 });
 
