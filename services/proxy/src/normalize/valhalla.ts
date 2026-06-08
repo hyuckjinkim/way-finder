@@ -11,7 +11,7 @@
  * 앱은 폴리라인을 디코드하지 않는다 — 정규화 레이어에서 1회 수행(C1 계승).
  * 빈 응답/형식 이상은 throw (silent 금지 — 핸들러 장애 격리가 명시적 502 처리).
  */
-import type { LatLng, Route, RouteLeg } from '@wayfinder/shared';
+import type { LatLng, Route, RouteLeg, RouteStep } from '@wayfinder/shared';
 import { decodePolyline } from './_shared/polyline.js';
 
 /** Valhalla leg summary (필요 필드만). time=초, length=km. */
@@ -19,9 +19,23 @@ interface ValhallaLegSummary {
   readonly time?: number;
   readonly length?: number;
 }
+/**
+ * Valhalla maneuver (필요 필드만). `begin_shape_index`는 leg `shape` 디코드 좌표의
+ * 인덱스 — 턴 시작 좌표 도출. `length`=km. 도착 maneuver(type 4)는 length 0·
+ * street_names 부재 — 추출기가 throw하지 않아야 한다.
+ */
+interface ValhallaManeuver {
+  readonly type?: number;
+  readonly instruction?: string;
+  readonly begin_shape_index?: number;
+  readonly end_shape_index?: number;
+  readonly street_names?: readonly string[];
+  readonly length?: number;
+}
 interface ValhallaLeg {
   readonly shape?: string;
   readonly summary?: ValhallaLegSummary;
+  readonly maneuvers?: readonly ValhallaManeuver[];
 }
 interface ValhallaTrip {
   readonly legs?: readonly ValhallaLeg[];
@@ -42,6 +56,42 @@ const VALHALLA_POLYLINE_PRECISION = 6;
 const KM_TO_M = 1000;
 
 /**
+ * maneuvers[] → RouteStep[] (P3 F2). 이미 디코드된 leg `coords`를 재사용한다
+ * (재디코드 금지). step `location` = `coords[begin_shape_index]`.
+ *
+ * `begin_shape_index`가 coords 범위 내임을 단언(off-by-one 방지) — 도착
+ * maneuver(type 4)는 begin_shape_index = 마지막 coords 인덱스이므로 `< length`로
+ * 유효. 도착 maneuver는 length 0(distanceM 0)·street_names 부재여도 throw 금지.
+ *
+ * @throws begin_shape_index가 coords 범위 밖일 때 (정규화 오류 — silent 금지).
+ */
+function extractSteps(
+  maneuvers: readonly ValhallaManeuver[],
+  coords: readonly LatLng[],
+  legIndex: number,
+): RouteStep[] {
+  return maneuvers.map((m, j) => {
+    const idx = m.begin_shape_index ?? 0;
+    if (idx < 0 || idx >= coords.length) {
+      throw new Error(
+        `valhalla: leg ${legIndex} maneuver ${j} begin_shape_index ${idx} out of coords range [0, ${coords.length})`,
+      );
+    }
+    const step: RouteStep = {
+      location: coords[idx]!,
+      instruction: m.instruction ?? '',
+      type: m.type ?? 0,
+      distanceM: Math.round((m.length ?? 0) * KM_TO_M),
+      shapeIndex: idx,
+    };
+    if (m.street_names && m.street_names.length > 0) {
+      step.streetNames = [...m.street_names];
+    }
+    return step;
+  });
+}
+
+/**
  * Valhalla `/route` 응답 → Route. 각 trip.leg를 단일 walk RouteLeg로 매핑.
  * @throws trip/legs 누락 또는 leg shape 디코드 결과가 비면 (silent 금지).
  */
@@ -55,7 +105,7 @@ export function normalizeValhalla(raw: ValhallaRouteRaw): Route {
     if (coords.length === 0) {
       throw new Error(`valhalla: leg ${i} has no shape geometry`);
     }
-    return {
+    const routeLeg: RouteLeg = {
       start: coords[0]!,
       end: coords[coords.length - 1]!,
       mode: 'walk',
@@ -63,6 +113,11 @@ export function normalizeValhalla(raw: ValhallaRouteRaw): Route {
       distanceM: Math.round((leg.summary?.length ?? 0) * KM_TO_M),
       coords,
     };
+    // 하위호환: maneuvers 보유 시에만 steps 부착 (미부착=기존 P4 폴리라인 동작).
+    if (leg.maneuvers && leg.maneuvers.length > 0) {
+      routeLeg.steps = extractSteps(leg.maneuvers, coords, i);
+    }
+    return routeLeg;
   });
 
   return {
