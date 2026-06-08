@@ -20,7 +20,7 @@
  * 최근접점 거리가 오프셋과 일치(테스트가 min-distance로 재확인). OFF_ROUTE_THRESHOLD_M
  * =30 을 사이에 두고 직전(≈29m)/직후(≈31m) straddle.
  */
-import type { LatLng, LocationSample } from '@wayfinder/shared';
+import type { LatLng, LocationSample, Route } from '@wayfinder/shared';
 
 /**
  * 기준 경로 = WALK_SIMPLE 골든 픽스처의 디코드 leg coords(55개, precision 6, 복사값).
@@ -176,3 +176,48 @@ export const POOR_ACCURACY_SEQUENCE: readonly LocationSample[] = [
   sample(REFERENCE_PATH[44]!, 1, 60), // 나쁨(60m 정확도)
   sample(offsetSouthM(OFFSET_BASE, 33), 2, 80), // 나쁨 + 위치 튐(≈33m)
 ];
+
+/**
+ * (4) 데모 통합 시퀀스 — /route/nav 데모 모드 구동(navStore + NavScreen 실제 reduce).
+ *
+ * 경로 앞부분을 따라 진행(턴 진행·남은 거리 감소 표시) → 정동 직선 구간에서 남쪽으로
+ * 이탈(이탈 배너 표시). 짧게 유지해 데모 가시성↑. 타임스탬프는 sample()이 재부여.
+ *
+ * 범위(advisor): REROUTE_DEBOUNCE_MS=5000ms 디바운스라 이 짧은 시퀀스로는 라우트
+ * *swap*까지 데모되지 않는다 — 데모는 **턴 진행 + off_route 배너**까지. 전체 재탐색
+ * 사이클(엣지·in-flight·swap·실패)은 reroute.test.ts(fake timers)·navStore.test.ts가 증명.
+ */
+export const DEMO_NAV_SEQUENCE: readonly LocationSample[] = [
+  ...REFERENCE_PATH.slice(0, 44).map((p, i) => sample(p, i)), // on-route 진행(턴·진행률)
+  sample(offsetSouthM(OFFSET_BASE, 50), 44), // 이탈(≈50m > 30m — off_route 배너)
+  sample(offsetSouthM(OFFSET_BASE, 50), 45), // 이탈 유지
+];
+
+/**
+ * 데모 경로 — DEMO_NAV_SEQUENCE와 **동일 geometry**(coords=REFERENCE_PATH)의 자기완결
+ * walk Route. /route/nav 데모 모드가 이것을 안내 경로로 쓴다(routeStore.result는 사용자
+ * 가변 입력·transit이라 합성 시퀀스와 불일치 — 데모는 자기완결 경로로 구동, advisor 지적).
+ *
+ * `steps`를 REFERENCE_PATH 알려진 인덱스에 앵커해 **턴 카드가 실제로 렌더**되게 한다
+ * (steps 없으면 navReduce가 폴리라인 추종으로 degrade — 턴 카드 미렌더). type 코드:
+ * 15=좌회전, 10=우회전, 4=도착(route.ts RouteStep JSDoc).
+ */
+export const DEMO_ROUTE: Route = {
+  legs: [
+    {
+      start: REFERENCE_PATH[0]!,
+      end: DESTINATION,
+      mode: 'walk',
+      durationSec: 900,
+      distanceM: 1100,
+      coords: [...REFERENCE_PATH],
+      steps: [
+        { location: REFERENCE_PATH[11]!, instruction: '세종대로20길로 좌회전하세요', type: 15, distanceM: 300 },
+        { location: REFERENCE_PATH[24]!, instruction: '청계천로로 우회전하세요', type: 10, distanceM: 400 },
+        { location: DESTINATION, instruction: '목적지에 도착했습니다', type: 4, distanceM: 0 },
+      ],
+    },
+  ],
+  totalDurationSec: 900,
+  totalDistanceM: 1100,
+};

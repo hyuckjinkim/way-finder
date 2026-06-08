@@ -8,6 +8,9 @@
     "declaration": false,
     "declarationMap": false,
     "types": ["react", "node"],
+    // navFlow.test.tsx가 NavScreen.tsx와 NavScreen.web.tsx를 .tsx 확장자로 *명시* import해
+    // 플랫폼 분기를 각각 테스트한다(확장자 없으면 resolver가 한 파일로 합쳐 분기 검증 불가).
+    // noEmit:true 전용 프로젝트라 안전(emit 없음 — 확장자 import 부작용 0).
     "allowImportingTsExtensions": true
   },
   "include": ["App.tsx", "app.config.ts", "app/**/*.ts", "app/**/*.tsx", "src/**/*.ts", "src/**/*.tsx"]

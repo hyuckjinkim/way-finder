@@ -28,6 +28,8 @@ export interface RouteResultScreenProps {
   route: Route | null;
   /** 뒤로 가기 콜백. */
   onBack: () => void;
+  /** 안내 시작 콜백(P3). 지정 + route 있을 때만 "안내 시작" 버튼 렌더. */
+  onStartNav?: () => void;
 }
 
 /** 초(seconds) → "N분" 또는 "N시간 M분" 문자열. */
@@ -48,6 +50,7 @@ function formatDistance(meters: number): string {
 export function RouteResultScreen({
   route,
   onBack,
+  onStartNav,
 }: RouteResultScreenProps): React.ReactElement {
   const mapRef = useRef<MapViewRef>(null);
 
@@ -140,6 +143,18 @@ export function RouteResultScreen({
                 </Text>
               </View>
             )}
+
+            {/* 안내 시작 버튼 (P3) — 콜백 지정 시만 렌더. */}
+            {onStartNav && (
+              <Pressable
+                style={styles.startNavBtn}
+                onPress={onStartNav}
+                accessibilityRole="button"
+                accessibilityLabel="안내 시작"
+              >
+                <Text style={styles.startNavText}>안내 시작</Text>
+              </Pressable>
+            )}
           </ScrollView>
         ) : (
           <Text style={styles.emptyText}>경로를 탐색 중입니다…</Text>
@@ -220,4 +235,12 @@ const styles = StyleSheet.create({
   customMetaProfile: { fontSize: 13, color: '#555', fontWeight: '600' },
   withinBudget: { fontSize: 13, color: '#2e7d32' },
   overBudget: { fontSize: 13, color: '#c62828' },
+  startNavBtn: {
+    marginTop: 12,
+    backgroundColor: '#1565c0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  startNavText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });

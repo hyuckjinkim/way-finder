@@ -22,6 +22,10 @@ export default function RouteResultRoute() {
   const { data } = useRouteQuery(stops, mode, preference, maxExtraMinutes);
 
   const onBack = React.useCallback(() => router.back(), [router]);
+  // P3: 안내 시작 → /route/nav. navStore가 routeStore.result를 안내 경로로 읽는다.
+  const onStartNav = React.useCallback(() => router.push('/route/nav'), [router]);
 
-  return <RouteResultScreen route={data ?? null} onBack={onBack} />;
+  return (
+    <RouteResultScreen route={data ?? null} onBack={onBack} onStartNav={onStartNav} />
+  );
 }
