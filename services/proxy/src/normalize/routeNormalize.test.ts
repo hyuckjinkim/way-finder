@@ -32,6 +32,23 @@ import {
   MAPBOX_SIMPLE_RAW,
   MAPBOX_NO_ROUTE_RAW,
 } from '../../test/fixtures/mapboxDirections.js';
+import {
+  KAKAO_CAR_GUIDES_RAW,
+  KAKAO_CAR_NO_GUIDES_RAW,
+} from '../../test/fixtures/kakaoCarGuides.js';
+import {
+  GOOGLE_CAR_STEPS_RAW,
+  GOOGLE_CAR_NO_STEPS_RAW,
+} from '../../test/fixtures/googleCarSteps.js';
+import {
+  TMAP_BIKE_GUIDES_RAW,
+  TMAP_BIKE_NO_GUIDES_RAW,
+} from '../../test/fixtures/tmapBikeGuides.js';
+
+/** 서울 대략 bbox — kakao car step location 검증. */
+function inSeoul(p: { lat: number; lng: number }): boolean {
+  return p.lat > 37.3 && p.lat < 37.8 && p.lng > 126.6 && p.lng < 127.4;
+}
 
 /** 공통 Route 형태 단언 헬퍼. */
 function expectValidRoute(route: Route): void {
@@ -193,5 +210,106 @@ describe('normalizeMapboxDirections', () => {
 
   it("code != 'Ok' → throw", () => {
     expect(() => normalizeMapboxDirections(MAPBOX_NO_ROUTE_RAW, 'car')).toThrow();
+  });
+});
+
+// ── P5 F2: 자동차/자전거 maneuvers → RouteStep 추출 (정규화만, 라우팅 불변) ──────
+describe('P5 F2 — kakao car guides → RouteStep', () => {
+  it('guides 보유 → steps 부착 (location·instruction·maneuver·type raw·distanceM)', () => {
+    const route = normalizeKakaoMobility(KAKAO_CAR_GUIDES_RAW);
+    const steps = route.legs[0]!.steps!;
+    expect(steps).toHaveLength(3);
+    expect(steps[0]!.maneuver).toBe('depart'); // type 100
+    expect(steps[1]!.maneuver).toBe('turn-left'); // type 2
+    expect(steps[1]!.type).toBe(2); // raw 보존
+    expect(steps[1]!.instruction).toBe('무교로 방면 좌회전');
+    expect(steps[1]!.distanceM).toBe(1500);
+    expect(steps[2]!.maneuver).toBe('arrive'); // type 101
+  });
+
+  it('step location이 x/y → {lat,lng}, 서울 bbox 내 (off-by-one 0)', () => {
+    const route = normalizeKakaoMobility(KAKAO_CAR_GUIDES_RAW);
+    for (const step of route.legs[0]!.steps!) {
+      expect(inSeoul(step.location)).toBe(true);
+    }
+    // guide1 x=126.98, y=37.561 → location {37.561, 126.98}.
+    expect(route.legs[0]!.steps![1]!.location).toEqual({ lat: 37.561, lng: 126.98 });
+  });
+
+  it('하위호환: guides 부재(빈 배열) → steps 미부착 (폴리라인 동작 불변)', () => {
+    const route = normalizeKakaoMobility(KAKAO_CAR_NO_GUIDES_RAW);
+    expect(route.legs[0]!.steps).toBeUndefined();
+    expect(route.legs[0]!.coords.length).toBeGreaterThan(1); // 폴리라인 보존
+  });
+});
+
+describe('P5 F2 — Google navigationInstruction → RouteStep', () => {
+  it('navigationInstruction 보유 → steps 부착 (maneuver 문자열 enum 직매핑, type 부재)', () => {
+    const route = normalizeGoogleRoutes(GOOGLE_CAR_STEPS_RAW, 'car');
+    const steps = route.legs[0]!.steps!;
+    expect(steps).toHaveLength(3);
+    expect(steps[0]!.maneuver).toBe('depart'); // DEPART
+    expect(steps[1]!.maneuver).toBe('turn-left'); // TURN_LEFT
+    expect(steps[1]!.instruction).toBe('Turn left');
+    expect(steps[1]!.distanceM).toBe(1000);
+    expect(steps[1]!.type).toBeUndefined(); // Google은 numeric 코드 없음
+    expect(steps[2]!.maneuver).toBe('turn-right'); // TURN_RIGHT
+  });
+
+  it('step location이 startLocation → leg coords 위 (디코드 폴리라인 점)', () => {
+    const route = normalizeGoogleRoutes(GOOGLE_CAR_STEPS_RAW, 'car');
+    const leg = route.legs[0]!;
+    for (const step of leg.steps!) {
+      const onPath = leg.coords.some(
+        (c) =>
+          Math.abs(c.lat - step.location.lat) < 1e-4 &&
+          Math.abs(c.lng - step.location.lng) < 1e-4,
+      );
+      expect(onPath).toBe(true);
+    }
+  });
+
+  it('bike 모드도 step 추출 (글로벌 자전거 best-effort)', () => {
+    const route = normalizeGoogleRoutes(GOOGLE_CAR_STEPS_RAW, 'bike');
+    expect(route.legs[0]!.mode).toBe('bike');
+    expect(route.legs[0]!.steps).toHaveLength(3);
+  });
+
+  it('하위호환: navigationInstruction 부재 → steps 미부착 (폴리라인 동작 불변)', () => {
+    const route = normalizeGoogleRoutes(GOOGLE_CAR_NO_STEPS_RAW, 'car');
+    expect(route.legs[0]!.steps).toBeUndefined();
+    expect(route.legs[0]!.coords.length).toBeGreaterThan(1);
+  });
+});
+
+describe('P5 F2 — tmap bike best-effort steps', () => {
+  it('turnType 보유 → steps 부착 (best-effort)', () => {
+    const route = normalizeTmapBike(TMAP_BIKE_GUIDES_RAW);
+    const steps = route.legs[0]!.steps!;
+    expect(steps).toHaveLength(3);
+    expect(steps[0]!.maneuver).toBe('depart'); // turnType 200
+    expect(steps[1]!.maneuver).toBe('turn-left'); // turnType 11
+    expect(steps[1]!.type).toBe(11); // raw 보존
+    expect(steps[2]!.maneuver).toBe('arrive'); // turnType 201
+    for (const s of steps) expect(inSeoul(s.location)).toBe(true);
+  });
+
+  it('하위호환: turnType 부재 → steps 미부착 (폴리라인 추종 graceful)', () => {
+    const route = normalizeTmapBike(TMAP_BIKE_NO_GUIDES_RAW);
+    expect(route.legs[0]!.steps).toBeUndefined();
+    expect(route.legs[0]!.coords.length).toBeGreaterThan(1);
+  });
+});
+
+describe('P5 F2 — maneuver 코드스페이스 정규화 수렴 (§1.2 load-bearing)', () => {
+  it('kakao numeric type 2 · Google TURN_LEFT가 동일 ManeuverKind로 수렴', () => {
+    const kakao = normalizeKakaoMobility(KAKAO_CAR_GUIDES_RAW);
+    const google = normalizeGoogleRoutes(GOOGLE_CAR_STEPS_RAW, 'car');
+    const kakaoLeft = kakao.legs[0]!.steps!.find((s) => s.type === 2)!;
+    const googleLeft = google.legs[0]!.steps![1]!; // TURN_LEFT
+    // 서로 다른 코드스페이스(numeric 2 vs 문자열 TURN_LEFT)가 같은 enum으로 수렴.
+    expect(kakaoLeft.maneuver).toBe('turn-left');
+    expect(googleLeft.maneuver).toBe('turn-left');
+    expect(kakaoLeft.maneuver).toBe(googleLeft.maneuver);
   });
 });

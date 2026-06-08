@@ -130,6 +130,36 @@ describe('normalizeValhalla — maneuvers → steps 추출 (F2)', () => {
     expect(left.streetNames).toEqual(['무교로']);
   });
 
+  it('numeric type → ManeuverKind enum 매핑 (P5 F1, type raw 보존)', () => {
+    const depart = leg.steps![0]!; // type 2 (Walk east — 출발)
+    expect(depart.type).toBe(2);
+    expect(depart.maneuver).toBe('depart');
+
+    const left = leg.steps![1]!; // type 15
+    expect(left.type).toBe(15);
+    expect(left.maneuver).toBe('turn-left');
+
+    const right = leg.steps![2]!; // type 10
+    expect(right.type).toBe(10);
+    expect(right.maneuver).toBe('turn-right');
+
+    const arrival = leg.steps![leg.steps!.length - 1]!; // type 4
+    expect(arrival.type).toBe(4);
+    expect(arrival.maneuver).toBe('arrive');
+  });
+
+  it('직진(type 8)은 straight, 미매핑 코드는 unknown으로 폴백', () => {
+    // walkSimple에 type 8(Continue) 존재 — straight 매핑 단언.
+    const straight = leg.steps!.find((s) => s.type === 8);
+    expect(straight).toBeDefined();
+    expect(straight!.maneuver).toBe('straight');
+    // safeProfile은 type 24(미매핑) 보유 → unknown.
+    const safe = normalizeValhalla(SAFE_PROFILE_RAW);
+    const unmapped = safe.legs[0]!.steps!.find((s) => s.type === 24);
+    expect(unmapped).toBeDefined();
+    expect(unmapped!.maneuver).toBe('unknown');
+  });
+
   it('도착 maneuver(type 4, length 0, street_names 부재)가 throw 없이 추출', () => {
     const arrival = leg.steps![leg.steps!.length - 1]!;
     expect(arrival.type).toBe(4);
@@ -220,6 +250,47 @@ describe('RouteLeg.steps 하위호환 스키마 (F1 — 정규화 레이어 증�
     };
     expect(legWithSteps.steps).toHaveLength(1);
     expect(legWithSteps.steps![0]!.location).toEqual(step.location);
+  });
+
+  it('maneuver?·type? 가산 optional — 기존 인라인 리터럴(maneuver 미기재) 무수정 정합 (P5 F1)', () => {
+    // maneuver·type 둘 다 생략한 리터럴이 타입 정합해야 649 무회귀(critic Critical).
+    const minimalStep: RouteStep = {
+      location: { lat: 37.5663, lng: 126.9779 },
+      instruction: 'Continue straight.',
+      distanceM: 100,
+    };
+    expect(minimalStep.maneuver).toBeUndefined();
+    expect(minimalStep.type).toBeUndefined();
+    // maneuver만 채운 리터럴(공급자 raw 코드 없는 Google 형)도 정합.
+    const enumOnlyStep: RouteStep = {
+      location: { lat: 37.57, lng: 126.99 },
+      instruction: 'Turn left.',
+      maneuver: 'turn-left',
+      distanceM: 50,
+    };
+    expect(enumOnlyStep.maneuver).toBe('turn-left');
+    expect(enumOnlyStep.type).toBeUndefined();
+  });
+
+  it('RouteLeg.traffic? 가산 optional — 미존재=기존 동작, 존재 시 타입 정합 (P5 F1)', () => {
+    const legNoTraffic: RouteLeg = {
+      start: { lat: 37.5663, lng: 126.9779 },
+      end: { lat: 37.5704, lng: 126.9921 },
+      mode: 'car',
+      durationSec: 100,
+      distanceM: 200,
+      coords: [
+        { lat: 37.5663, lng: 126.9779 },
+        { lat: 37.5704, lng: 126.9921 },
+      ],
+    };
+    expect(legNoTraffic.traffic).toBeUndefined();
+    const legWithTraffic: RouteLeg = {
+      ...legNoTraffic,
+      traffic: { congestion: 'jam', delaySec: 180 },
+    };
+    expect(legWithTraffic.traffic!.congestion).toBe('jam');
+    expect(legWithTraffic.traffic!.delaySec).toBe(180);
   });
 });
 

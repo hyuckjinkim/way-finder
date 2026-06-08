@@ -58,6 +58,29 @@ export interface RouteCustomMeta {
 }
 
 /**
+ * 공급자 무관 정규화 maneuver 종류 (P5 F1 §1.2).
+ *
+ * **provider-agnostic 단일 키.** Valhalla numeric·카카오 numeric·Google 문자열 enum은
+ * 서로 다른 코드스페이스라 같은 필드(`RouteStep.type: number`)에 재사용하면 wire 드리프트.
+ * 안내 어휘·아이콘 함수는 *이 정규화 enum만* 키로 쓰고(공급자 무관), 미존재·`'unknown'`이면
+ * `RouteStep.instruction` 원문으로 폴백한다.
+ * - 매핑 테이블 완전성은 실 응답(키 발급) 후 보강(open-questions §P5). 미매핑 코드→`'unknown'`.
+ */
+export type ManeuverKind =
+  | 'depart'
+  | 'turn-left'
+  | 'turn-right'
+  | 'slight-left'
+  | 'slight-right'
+  | 'straight'
+  | 'uturn'
+  | 'roundabout'
+  | 'merge'
+  | 'fork'
+  | 'arrive'
+  | 'unknown';
+
+/**
  * 경로의 한 턴(maneuver) — 턴바이턴 네비의 단일 단위 (P3 §1).
  *
  * Valhalla `maneuvers[]` 정규화 산물(F2). 상태 머신의 "다음 턴까지 거리" 입력이
@@ -73,17 +96,39 @@ export interface RouteStep {
   /** 안내 문구 (예: "Turn left onto 무교로."). Valhalla `instruction`. */
   instruction: string;
   /**
-   * Valhalla maneuver type 코드. 주요 코드:
-   * 2=출발/직진 시작, 4=도착, 8=직진, 10=우회전, 15=좌회전.
-   * (전체 코드는 Valhalla turn-by-turn 문서 참조 — 정규화는 raw 코드를 보존한다.)
+   * 정규화 maneuver 종류 (P5 F1, 선택). **소비자(안내 어휘·아이콘)의 단일 키** —
+   * Valhalla numeric·카카오 numeric·Google 문자열이 이 enum으로 수렴(§1.2).
+   * 미존재 시 `instruction` 원문 폴백. 가산 optional이라 기존 인라인 `RouteStep`
+   * 리터럴(maneuver 미기재) 무수정 — P3 `steps?`·P4 `customMeta` 하위호환 패턴.
    */
-  type: number;
+  maneuver?: ManeuverKind;
+  /**
+   * 공급자 raw maneuver 코드 (선택 — 디버그·후속용). Valhalla numeric / 카카오 numeric
+   * 원값 보존. **공급자마다 의미가 다른 코드스페이스라 소비자 키로 쓰지 않는다**(→ `maneuver`).
+   * Google은 numeric 코드 자체가 없어 부재 가능. 주요 Valhalla 코드:
+   * 2=출발, 4=도착, 8=직진, 10=우회전, 15=좌회전.
+   */
+  type?: number;
   /** 이 step 구간 거리(미터). Valhalla `length`(km) ×1000. 도착 step은 0. */
   distanceM: number;
   /** 도로명 (선택). Valhalla `street_names` — 도착·이름 없는 턴에는 부재. */
   streetNames?: string[];
   /** leg `coords` 인덱스 (선택). 정확 투영용 — `begin_shape_index` 원값 보존. */
   shapeIndex?: number;
+}
+
+/**
+ * 실시간 교통 leg 메타 (P5 F1, 선택). 도보/대중교통 leg에는 부재.
+ *
+ * steps·customMeta 하위호환 패턴 — 미존재=교통 정보 없음(기존 동작). 실시간 교통
+ * 정규화(traffic.ts)·NavScreen 표시(U)의 단일 표면. 라이브 데이터는 무료 티어
+ * viability 확정 후(open-questions §P5) — 현재는 정규화·표시까지만.
+ */
+export interface RouteLegTraffic {
+  /** 혼잡도 버킷. `free`=원활, `slow`=서행, `jam`=정체. */
+  congestion?: 'free' | 'slow' | 'jam';
+  /** 교통으로 인한 추가 지연(초). 미존재=지연 미상. */
+  delaySec?: number;
 }
 
 /**
@@ -123,6 +168,11 @@ export interface RouteLeg {
    * (P4 `customMeta` 하위호환 패턴 그대로 — optional, 미존재 시 미부착.)
    */
   steps?: RouteStep[];
+  /**
+   * 실시간 교통 메타 (P5 F1, 선택). 미존재=교통 정보 없음(기존 동작 — 기존 정규화기
+   * 무회귀). traffic 정규화기(traffic.ts)가 채우고 NavScreen이 혼잡 표시에 소비.
+   */
+  traffic?: RouteLegTraffic;
 }
 
 /**
