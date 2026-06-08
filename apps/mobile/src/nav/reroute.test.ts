@@ -138,6 +138,30 @@ describe('createRerouteController — 상태 소유·실패', () => {
     expect(getRoute).toHaveBeenCalledTimes(2);
     expect(onSuccess).toHaveBeenCalledTimes(1);
   });
+
+  // advisor 지적: 실패 후 on_route 복귀 없이 계속 off_route면 엣지(true→true 부재)가
+  // 재발화 못 해 사용자가 고립될 수 있다. 실패 시 재무장으로 자동 재시도해야 한다.
+  it('실패 후 off_route를 유지하면(복귀 없이) 디바운스마다 자동 재시도한다', async () => {
+    const err = new Error('network down');
+    const getRoute = vi
+      .fn()
+      .mockRejectedValueOnce(err) // 1차 실패
+      .mockResolvedValueOnce(NEW_ROUTE); // 2차 성공
+    const onSuccess = vi.fn();
+    const onFailed = vi.fn();
+    const ctrl = createRerouteController(getRoute, DEST, BASE_REQUEST, { onSuccess, onFailed });
+
+    ctrl.onSample(false, coord(0));
+    ctrl.onSample(true, coord(1)); // 이탈 → 1차 발사
+    await vi.advanceTimersByTimeAsync(REROUTE_DEBOUNCE_MS);
+    expect(getRoute).toHaveBeenCalledTimes(1);
+    expect(onFailed).toHaveBeenCalledTimes(1);
+
+    // 복귀 표본 없이 계속 off_route — 추가 onSample 없이 디바운스만 경과.
+    await vi.advanceTimersByTimeAsync(REROUTE_DEBOUNCE_MS);
+    expect(getRoute).toHaveBeenCalledTimes(2); // 자동 재시도(고립 방지)
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('createRerouteController — 엣지 재진입', () => {

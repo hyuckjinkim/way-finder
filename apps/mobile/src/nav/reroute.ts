@@ -77,6 +77,13 @@ export function createRerouteController(
         inFlight = false;
         console.warn('[reroute] 재탐색 실패 — 기존 경로 유지', error);
         callbacks.onFailed(error);
+        // 실패 후에도 여전히 off_route면 재시도 무장. 엣지 트리거(on_route→off_route)는
+        // 다시 안 걸리므로(true→true) 이 재무장이 없으면 사용자가 off_route에 고립된다.
+        // 디바운스 간격이 재시도 스페이싱을 제공 — 타이트 루프 아님(advisor 지적).
+        if (wasOffRoute && armTimer === null) {
+          pendingCoord = currentCoord; // 새 표본이 없어도 마지막 시도 좌표로 재시도.
+          armTimer = setTimeout(fire, REROUTE_DEBOUNCE_MS);
+        }
       });
   }
 
