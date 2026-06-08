@@ -111,4 +111,26 @@ gated('D3 라이브 Valhalla e2e — 프록시 실 모드 → 실 /route → 정
     expect(route.legs[0]!.mode).toBe('walk');
     expect(route.totalDistanceM).toBeGreaterThan(0);
   });
+
+  // 분기 단언 (advisor): 골든 픽스처는 라이브 출력에서 캡처돼 "프로필이 실제로
+  // 서로 다른 경로를 내는가"를 증명하지 못한다(costing 역전 버그가 통과한 빈틈).
+  // costing 옵션이 실제로 라우팅에 영향을 줌을 더 긴 OD에서 직접 검증한다.
+  it('서로 다른 프로필은 실 컨테이너에서 서로 다른 경로를 산출한다 (costing이 라우팅에 영향)', async () => {
+    // 광화문↔서울역 — 도심 격자라 footway-선호(walkable)와 가로등-선호(safe)가 갈릴 여지.
+    const longOD = [
+      { lat: 37.5759, lng: 126.9768 },
+      { lat: 37.5547, lng: 126.9707 },
+    ];
+    const shape = async (preference: string): Promise<string> => {
+      const res = await postRoute({ stops: longOD, mode: 'walk', preference, maxExtraMinutes: 20 });
+      expect(res.status).toBe(200);
+      const route = (await res.json()) as Route;
+      return route.legs.map((l) => `${l.coords.length}:${l.distanceM.toFixed(0)}`).join('|');
+    };
+    const walkable = await shape('walkable');
+    const safe = await shape('safe');
+    // 두 프로필이 동일 OD에서 byte-identical 경로면 costing이 무의미 → 회귀 신호.
+    expect(walkable).not.toBe(safe);
+    console.log(`[D3 divergence] walkable=${walkable} vs safe=${safe}`);
+  });
 });
