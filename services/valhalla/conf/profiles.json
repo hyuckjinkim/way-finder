@@ -13,10 +13,10 @@
       "costing_options": { "pedestrian": {} }
     },
     "walkable": {
-      "_note": "보행자 친화 — footway/보도 가중 선호.",
+      "_note": "보행자 친화 — footway/보도 선호. 곱셈 비용 <1.0=선호(보행로 우선).",
       "costing": "pedestrian",
       "costing_options": {
-        "pedestrian": { "walkway_factor": 2.0, "sidewalk_factor": 2.0 }
+        "pedestrian": { "walkway_factor": 0.5, "sidewalk_factor": 0.5 }
       }
     },
     "safe": {
@@ -27,10 +27,10 @@
       }
     },
     "quiet": {
-      "_note": "footway 가중 + 생활도로 선호로 유동인구 적은 경로 근사.",
+      "_note": "footway 선호 + 생활도로 선호로 유동인구 적은 경로 근사. 곱셈 비용 <1.0=선호.",
       "costing": "pedestrian",
       "costing_options": {
-        "pedestrian": { "walkway_factor": 1.5, "use_living_streets": 1.0 }
+        "pedestrian": { "walkway_factor": 0.7, "use_living_streets": 1.0 }
       }
     }
   }

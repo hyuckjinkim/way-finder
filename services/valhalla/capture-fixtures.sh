@@ -66,11 +66,11 @@ capture safeProfile     SAFE_PROFILE_RAW \
   ',"costing_options":{"pedestrian":{"use_lit":1.0,"alley_factor":4.0,"driveway_factor":8.0}}' \
   "[$A,$B]" "안전 프로필 (use_lit+alley/driveway 회피 — 소요 증가)."
 capture walkableProfile WALKABLE_PROFILE_RAW \
-  ',"costing_options":{"pedestrian":{"walkway_factor":2.0,"sidewalk_factor":2.0}}' \
-  "[$A,$B]" "걷기좋은 프로필 (walkway/sidewalk 가중)."
+  ',"costing_options":{"pedestrian":{"walkway_factor":0.5,"sidewalk_factor":0.5}}' \
+  "[$A,$B]" "걷기좋은 프로필 (walkway/sidewalk 선호 — 곱셈 비용 <1.0)."
 capture quietProfile    QUIET_PROFILE_RAW \
-  ',"costing_options":{"pedestrian":{"walkway_factor":1.5,"use_living_streets":1.0}}' \
-  "[$A,$B]" "한적 프로필 (walkway 가중 + 생활도로 선호)."
+  ',"costing_options":{"pedestrian":{"walkway_factor":0.7,"use_living_streets":1.0}}' \
+  "[$A,$B]" "한적 프로필 (walkway 선호 <1.0 + 생활도로 선호)."
 
 rm -rf "${TMP}"
 echo "[capture] DONE → ${OUT}/*.ts"

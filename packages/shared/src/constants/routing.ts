@@ -49,9 +49,10 @@ export interface PedestrianCostingOptions {
 /**
  * 프로필 → Valhalla costing 매핑 (P4 §1 검증 옵션 기반, §3 F1.2 확정값).
  *
- * - `walkable`: footway/보도 가중(선호).
+ * **`*_factor`는 곱셈 비용 계수: <1.0=선호(비용↓), >1.0=회피(비용↑).**
+ * - `walkable`: footway/보도 선호(`walkway_factor`·`sidewalk_factor` <1.0 → 보행로 우선).
  * - `safe`: 가로등(`use_lit=1` 비점등 회피) + 소로(alley/driveway) 회피로 큰길 근사.
- * - `quiet`: footway 가중 + 생활도로 선호로 유동인구 적은 경로 근사.
+ * - `quiet`: footway 선호(`walkway_factor` <1.0) + 생활도로 선호로 유동인구 적은 경로 근사.
  *
  * **`scenic`은 항목 없음(❌ 미지원)** — `RoutePreference`에는 존재하나 costing 미지원.
  * 공원·녹지 옵션이 Valhalla에 부재하여 그래프 보강 후속 단계에서 `ENABLE_SCENIC` flag로
@@ -61,7 +62,9 @@ export interface PedestrianCostingOptions {
 export const PROFILE_COSTING: Partial<
   Record<RoutePreference, PedestrianCostingOptions>
 > = {
-  walkable: { walkway_factor: 2.0, sidewalk_factor: 2.0 },
+  // 곱셈 비용: <1.0=선호. 보행로(walkway/sidewalk) 우선 → 비용 낮춤.
+  walkable: { walkway_factor: 0.5, sidewalk_factor: 0.5 },
   safe: { use_lit: 1.0, alley_factor: 4.0, driveway_factor: 8.0 },
-  quiet: { walkway_factor: 1.5, use_living_streets: 1.0 },
+  // 곱셈 비용: <1.0=선호. footway 우선(walkway_factor 0.7) + 생활도로 선호.
+  quiet: { walkway_factor: 0.7, use_living_streets: 1.0 },
 } as const;

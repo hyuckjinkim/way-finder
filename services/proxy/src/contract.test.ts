@@ -127,9 +127,10 @@ describe('contract — RouteRequest P4 확장 필드 (preference·maxExtraMinute
     expect(PROFILE_COSTING.scenic).toBeUndefined();
     expect(PROFILE_COSTING.fastest).toBeUndefined();
     // 검증된 §1 옵션값 동결(드리프트 방지).
-    expect(PROFILE_COSTING.walkable).toEqual({ walkway_factor: 2.0, sidewalk_factor: 2.0 });
+    // 곱셈 비용 계수: <1.0=선호. 보행로 우선(walkway/sidewalk <1.0).
+    expect(PROFILE_COSTING.walkable).toEqual({ walkway_factor: 0.5, sidewalk_factor: 0.5 });
     expect(PROFILE_COSTING.safe).toEqual({ use_lit: 1.0, alley_factor: 4.0, driveway_factor: 8.0 });
-    expect(PROFILE_COSTING.quiet).toEqual({ walkway_factor: 1.5, use_living_streets: 1.0 });
+    expect(PROFILE_COSTING.quiet).toEqual({ walkway_factor: 0.7, use_living_streets: 1.0 });
   });
 
   it('+N분 슬라이더 범위 상수가 일관(min ≤ default ≤ max)', () => {
