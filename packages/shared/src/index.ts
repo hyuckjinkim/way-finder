@@ -48,3 +48,11 @@ export type {
   MapMarker,
   MapPolyline,
 } from './map/MapView.js';
+export {
+  EARTH_RADIUS_M,
+  toRadians,
+  haversineDistanceM,
+} from './geo/distance.js';
+export { initialBearingDeg } from './geo/bearing.js';
+export { projectToPath, pathLengthM } from './geo/projection.js';
+export type { RouteProjection } from './geo/projection.js';
