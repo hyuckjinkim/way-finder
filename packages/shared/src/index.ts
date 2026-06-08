@@ -18,6 +18,8 @@ export type {
   RouteRequest,
   RouteCustomMeta,
   RoutePreference,
+  ManeuverKind,
+  RouteLegTraffic,
   TransitMeta,
   TravelMode,
 } from './types/route.js';

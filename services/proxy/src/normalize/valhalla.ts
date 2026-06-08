@@ -11,8 +11,28 @@
  * 앱은 폴리라인을 디코드하지 않는다 — 정규화 레이어에서 1회 수행(C1 계승).
  * 빈 응답/형식 이상은 throw (silent 금지 — 핸들러 장애 격리가 명시적 502 처리).
  */
-import type { LatLng, Route, RouteLeg, RouteStep } from '@wayfinder/shared';
+import type { LatLng, ManeuverKind, Route, RouteLeg, RouteStep } from '@wayfinder/shared';
 import { decodePolyline } from './_shared/polyline.js';
+
+/**
+ * Valhalla numeric maneuver `type` → provider-agnostic `ManeuverKind` (P5 F1 §1.2).
+ *
+ * 골든 픽스처에 실존하는 코드만 보수적으로 매핑(2·4·8·10·15 — 문서 표). 미매핑 코드는
+ * `'unknown'`(폴백 시 instruction 원문). 전체 Valhalla 코드표 충실도는 실 응답 후 보강
+ * (open-questions §P5 — 추측 매핑으로 잠재 버그를 만들지 않는다). `type` raw는 별도 보존.
+ */
+const VALHALLA_MANEUVER_KIND: Readonly<Record<number, ManeuverKind>> = {
+  2: 'depart', // 출발/직진 시작
+  4: 'arrive', // 도착
+  8: 'straight', // 직진
+  10: 'turn-right', // 우회전
+  15: 'turn-left', // 좌회전
+};
+
+/** Valhalla numeric `type` → `ManeuverKind`. 미매핑·undefined → `'unknown'`. */
+function valhallaManeuverKind(type: number | undefined): ManeuverKind {
+  return (type !== undefined && VALHALLA_MANEUVER_KIND[type]) || 'unknown';
+}
 
 /** Valhalla leg summary (필요 필드만). time=초, length=km. */
 interface ValhallaLegSummary {
@@ -80,7 +100,8 @@ function extractSteps(
     const step: RouteStep = {
       location: coords[idx]!,
       instruction: m.instruction ?? '',
-      type: m.type ?? 0,
+      maneuver: valhallaManeuverKind(m.type), // 정규화 enum (소비자 키)
+      type: m.type ?? 0, // raw 보존 (디버그)
       distanceM: Math.round((m.length ?? 0) * KM_TO_M),
       shapeIndex: idx,
     };

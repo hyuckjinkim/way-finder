@@ -23,6 +23,8 @@ import {
   type RerouteCallbacks,
 } from '../nav/reroute.js';
 import type { LocationProvider } from '../nav/locationProvider.js';
+import type { VoiceGuide } from '../nav/voiceGuide.js';
+import { navInstructionText } from '../nav/navInstructionText.js';
 import { getRoute as defaultGetRoute } from '../services/RouteService.js';
 
 /** 재탐색 경로 탐색기 시그니처 (RouteService.getRoute와 동일 — C3 주입 패턴). */
@@ -42,6 +44,13 @@ export interface StartNavArgs {
    * 주입 패턴 계승, 전역 모듈 교체 없이 격리). C3 (2)항 계약 불변.
    */
   getRoute?: GetRoute;
+  /**
+   * 음성 안내 엔진 (P5 U2, 선택). 미지정 시 음성 배선 없음(기존 동작 — 무회귀).
+   * 통합 레이어(U2)가 다음 턴(`activeStepIndex`) 변경 시 `navInstructionText`로 문장을
+   * 생성해 `speak`한다. 실 모드=`createVoiceGuide()`(expo), 데모/테스트=합성 spy.
+   * navMachine은 순수 유지 — 발화 소유는 스토어(P3 경계 계승).
+   */
+  voiceGuide?: VoiceGuide;
 }
 
 /** 세션 컨트롤러 핸들 — 구독 해지 + reroute 타이머 정리. */
@@ -62,6 +71,12 @@ export interface NavSessionActions {
   startNav(args: StartNavArgs): void;
   /** 세션 종료 — 구독 해지·타이머 정리·상태 초기화. */
   stopNav(): void;
+  /**
+   * 음성 안내 on/off 토글 (P5 U2). NavScreen 토글 intent를 수신해 발화 게이트를
+   * 켜고/끈다. off 시 현재·대기 발화를 즉시 중단(`voiceGuide.stop`). NavScreen은
+   * 버튼 레이블용 로컬 상태만 보유(U1 "intent만 방출") — 실 게이트는 여기 소유.
+   */
+  setVoiceEnabled(enabled: boolean): void;
 }
 
 /** 목적지(재탐색 stops 도착점) = 마지막 leg의 end. */
@@ -74,10 +89,26 @@ export const useNavStore = create<NavSessionState & NavSessionActions>((set, get
   // 모듈 단일 세션 — 동시 1개 네비(중복 구독 방지). 클로저로 보유(상태 외부).
   let session: SessionHandle | null = null;
   let rerouting = false;
+  // 음성 게이트·엔진(P5 U2 — rerouting과 동일 클로저 idiom, 반응형 상태 미도입).
+  let voiceEnabled = false;
+  let voice: VoiceGuide | null = null;
 
   /** rerouting 오버레이를 기하 status 위에 적용한다(advisor seam). */
   function applyOverlay(geo: NavState): NavState {
     return rerouting ? { ...geo, status: 'rerouting' } : geo;
+  }
+
+  /**
+   * 음성 발화 — 토글 on이고 다음 턴(`activeStepIndex`)이 직전과 다를 때만(P5 U2).
+   * `navInstructionText`로 모드별 문장을 생성(mode=활성 leg에서 도출). 동일 step
+   * 재발화는 S2 합성 디바운스(직전 동일 텍스트 억제)가 백스톱 — `navInstructionText`
+   * 출력은 step당 안정적(거리는 `step.distanceM` 키, 매 표본 distanceToNextTurnM 아님).
+   */
+  function maybeSpeak(prev: NavState, geo: NavState, route: Route): void {
+    if (!voiceEnabled || !voice) return;
+    if (!geo.nextStep || geo.activeStepIndex === prev.activeStepIndex) return;
+    const mode = route.legs[geo.activeLegIndex]?.mode ?? 'walk';
+    voice.speak(navInstructionText(geo.nextStep, mode));
   }
 
   function teardown(): void {
@@ -87,18 +118,21 @@ export const useNavStore = create<NavSessionState & NavSessionActions>((set, get
       session = null;
     }
     rerouting = false;
+    voice?.stop();
   }
 
   return {
     activeRoute: null,
     navState: null,
 
-    startNav({ route, baseRequest, provider, getRoute = defaultGetRoute }) {
+    startNav({ route, baseRequest, provider, getRoute = defaultGetRoute, voiceGuide }) {
       // 기존 세션이 있으면 먼저 정리(중복 구독·누수 방지).
       teardown();
 
       let currentRoute = route;
       rerouting = false;
+      voice = voiceGuide ?? null;
+      voiceEnabled = false; // 토글 off로 시작 — NavScreen 토글이 켤 때 발화(U1 기본).
       set({ activeRoute: route, navState: initialNavState(route) });
 
       const callbacks: RerouteCallbacks = {
@@ -136,6 +170,8 @@ export const useNavStore = create<NavSessionState & NavSessionActions>((set, get
         const geo = navReduce(prev, sample, currentRoute);
         // 기하 status로 컨트롤러 구동(in-flight 가드가 반복 true 흡수).
         controller.onSample(geo.status === 'off_route', sample.coord);
+        // 음성: 다음 턴(activeStepIndex) 변경 시 발화(토글 on일 때만).
+        maybeSpeak(prev, geo, currentRoute);
         set({ navState: applyOverlay(geo) });
       });
 
@@ -145,6 +181,12 @@ export const useNavStore = create<NavSessionState & NavSessionActions>((set, get
     stopNav() {
       teardown();
       set({ activeRoute: null, navState: null });
+    },
+
+    setVoiceEnabled(enabled: boolean) {
+      voiceEnabled = enabled;
+      // off로 전환 시 현재·대기 발화 즉시 중단(억제 상태도 초기화 — 재토글 시 재발화).
+      if (!enabled) voice?.stop();
     },
   };
 });

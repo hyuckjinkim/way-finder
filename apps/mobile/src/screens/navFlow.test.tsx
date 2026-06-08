@@ -180,3 +180,243 @@ describe('D3 라우트 배선 — nav.tsx stub', () => {
     expect(html.length).toBeGreaterThan(0);
   });
 });
+
+// ─── U1: 음성 토글 + 교통 표시 (P5 U1) ─────────────────────────────────────
+
+/** traffic 메타 포함 Route 픽스처 (인라인 — 공유 mock 미수정) */
+const ROUTE_WITH_TRAFFIC: Route = {
+  legs: [
+    {
+      start: { lat: 37.5665, lng: 126.978 },
+      end: { lat: 37.567, lng: 126.979 },
+      mode: 'car',
+      durationSec: 600,
+      distanceM: 2000,
+      coords: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.567, lng: 126.979 },
+      ],
+      traffic: { congestion: 'jam', delaySec: 120 },
+    },
+  ],
+  totalDurationSec: 600,
+  totalDistanceM: 2000,
+};
+
+const ROUTE_WITH_SLOW_TRAFFIC: Route = {
+  legs: [
+    {
+      start: { lat: 37.5665, lng: 126.978 },
+      end: { lat: 37.567, lng: 126.979 },
+      mode: 'car',
+      durationSec: 600,
+      distanceM: 2000,
+      coords: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.567, lng: 126.979 },
+      ],
+      traffic: { congestion: 'slow' },
+    },
+  ],
+  totalDurationSec: 600,
+  totalDistanceM: 2000,
+};
+
+const ROUTE_WITH_FREE_TRAFFIC: Route = {
+  legs: [
+    {
+      start: { lat: 37.5665, lng: 126.978 },
+      end: { lat: 37.567, lng: 126.979 },
+      mode: 'car',
+      durationSec: 600,
+      distanceM: 2000,
+      coords: [
+        { lat: 37.5665, lng: 126.978 },
+        { lat: 37.567, lng: 126.979 },
+      ],
+      traffic: { congestion: 'free' },
+    },
+  ],
+  totalDurationSec: 600,
+  totalDistanceM: 2000,
+};
+
+describe('U1 음성 토글 — NavScreen.tsx (P5)', () => {
+  it('defaultVoiceEnabled=false(기본): 음성 안내 켜기 레이블 포함', () => {
+    const html = render(
+      <NativeNavScreen route={WALK_SIMPLE} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).toContain('음성 안내 켜기');
+  });
+
+  it('defaultVoiceEnabled=true: 음성 안내 끄기 레이블 포함', () => {
+    const html = render(
+      <NativeNavScreen
+        route={WALK_SIMPLE}
+        navState={MOCK_NAV_STATE}
+        defaultVoiceEnabled={true}
+      />,
+    );
+    expect(html).toContain('음성 안내 끄기');
+  });
+
+  it('음성 on 상태에서 off 상태와 레이블이 다름 (toggle 상태 구분)', () => {
+    const htmlOn = render(
+      <NativeNavScreen route={WALK_SIMPLE} navState={MOCK_NAV_STATE} defaultVoiceEnabled={true} />,
+    );
+    const htmlOff = render(
+      <NativeNavScreen route={WALK_SIMPLE} navState={MOCK_NAV_STATE} defaultVoiceEnabled={false} />,
+    );
+    expect(htmlOn).not.toEqual(htmlOff);
+  });
+
+  it('음성 토글 버튼이 있어도 기존 뒤로 가기(←) 버튼 불변', () => {
+    const html = render(
+      <NativeNavScreen route={WALK_SIMPLE} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).toContain('←');
+  });
+
+  it('웹 분기는 음성 토글 관련 레이블 없음 (웹 격리 확인)', () => {
+    const html = render(
+      <WebNavScreen route={WALK_SIMPLE} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).not.toContain('음성 안내 켜기');
+    expect(html).not.toContain('음성 안내 끄기');
+  });
+});
+
+// ─── U2: 자동차 경로 데모 흐름 (P5 §4 U2 작업 2) ─────────────────────────────
+//
+// 자동차 경로(maneuvers steps + traffic) → NavScreen이 car 턴 카드(raw instruction)·
+// 교통 배지·음성 토글을 함께 렌더. 턴 카드는 navInstructionText가 아니라 raw
+// instruction을 표시한다(plan §0 — VoiceGuide가 navInstructionText의 유일 소비자).
+
+/** 자동차 maneuvers steps + 교통 정체 메타 — 데모 흐름 렌더 입력. */
+const CAR_ROUTE_WITH_STEPS: Route = {
+  legs: [
+    {
+      start: { lat: 37.5563, lng: 126.9723 },
+      end: { lat: 37.5665, lng: 126.978 },
+      mode: 'car',
+      durationSec: 600,
+      distanceM: 2400,
+      coords: [
+        { lat: 37.5563, lng: 126.9723 },
+        { lat: 37.5665, lng: 126.978 },
+      ],
+      steps: [
+        {
+          location: { lat: 37.56, lng: 126.975 },
+          instruction: '강남대로로 우회전하세요',
+          maneuver: 'turn-right',
+          distanceM: 800,
+        },
+      ],
+      traffic: { congestion: 'jam', delaySec: 180 },
+    },
+  ],
+  totalDurationSec: 600,
+  totalDistanceM: 2400,
+};
+
+/** 자동차 첫 턴(우회전)을 다음 턴으로 가진 NavState. */
+const CAR_NAV_STATE: NavState = {
+  status: 'navigating',
+  activeLegIndex: 0,
+  activeStepIndex: 0,
+  distanceToNextTurnM: 800,
+  distanceRemainingM: 2400,
+  durationRemainingSec: 600,
+  nextStep: CAR_ROUTE_WITH_STEPS.legs[0]!.steps![0]!,
+};
+
+describe('U2 자동차 경로 데모 흐름 — NavScreen.tsx (P5)', () => {
+  it('자동차 경로: 턴 카드에 raw maneuver instruction 렌더(차량 어휘)', () => {
+    const html = render(
+      <NativeNavScreen route={CAR_ROUTE_WITH_STEPS} navState={CAR_NAV_STATE} />,
+    );
+    expect(html).toContain('강남대로로 우회전하세요');
+    expect(html).toContain('800 m');
+  });
+
+  it('자동차 경로: 교통 배지(정체)와 턴 카드가 함께 표시', () => {
+    const html = render(
+      <NativeNavScreen route={CAR_ROUTE_WITH_STEPS} navState={CAR_NAV_STATE} />,
+    );
+    expect(html).toContain('교통 정체');
+    expect(html).toContain('강남대로로 우회전하세요');
+  });
+
+  it('자동차 경로: 음성 토글 버튼이 함께 동작(기본 off — 켜기 레이블)', () => {
+    const html = render(
+      <NativeNavScreen route={CAR_ROUTE_WITH_STEPS} navState={CAR_NAV_STATE} />,
+    );
+    expect(html).toContain('음성 안내 켜기');
+  });
+
+  it('웹 분기: 자동차 경로도 비활성 안내 + 턴 카드/배지 없음(웹 격리)', () => {
+    const html = render(
+      <WebNavScreen route={CAR_ROUTE_WITH_STEPS} navState={CAR_NAV_STATE} />,
+    );
+    expect(html).toContain('모바일 앱에서 이용하세요');
+    expect(html).not.toContain('강남대로로 우회전하세요');
+    expect(html).not.toContain('교통 정체');
+  });
+});
+
+describe('U1 교통 표시 — NavScreen.tsx (P5)', () => {
+  it('traffic.congestion=jam → "교통 정체" 배지 포함', () => {
+    const html = render(
+      <NativeNavScreen route={ROUTE_WITH_TRAFFIC} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).toContain('교통 정체');
+  });
+
+  it('traffic.congestion=slow → "교통 서행" 배지 포함', () => {
+    const html = render(
+      <NativeNavScreen route={ROUTE_WITH_SLOW_TRAFFIC} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).toContain('교통 서행');
+  });
+
+  it('traffic.congestion=free → "교통 원활" 배지 포함', () => {
+    const html = render(
+      <NativeNavScreen route={ROUTE_WITH_FREE_TRAFFIC} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).toContain('교통 원활');
+  });
+
+  it('traffic 없는 경로(WALK_SIMPLE) → 교통 배지 없음', () => {
+    const html = render(
+      <NativeNavScreen route={WALK_SIMPLE} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).not.toContain('교통 원활');
+    expect(html).not.toContain('교통 서행');
+    expect(html).not.toContain('교통 정체');
+  });
+
+  it('route=null → 교통 배지 없음 (throw 없이)', () => {
+    const html = render(
+      <NativeNavScreen route={null} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).not.toContain('교통');
+    expect(html.length).toBeGreaterThan(0);
+  });
+
+  it('교통 배지 있어도 기존 진행 패널(남은 시간·거리) 불변', () => {
+    const html = render(
+      <NativeNavScreen route={ROUTE_WITH_TRAFFIC} navState={MOCK_NAV_STATE} />,
+    );
+    // MOCK_NAV_STATE.durationRemainingSec=900 → 15분 (navState가 표시 시간 소유)
+    expect(html).toContain('15분');
+    expect(html).toContain('교통 정체');
+  });
+
+  it('웹 분기는 교통 배지 렌더 안 함 (웹 격리 확인)', () => {
+    const html = render(
+      <WebNavScreen route={ROUTE_WITH_TRAFFIC} navState={MOCK_NAV_STATE} />,
+    );
+    expect(html).not.toContain('교통 정체');
+  });
+});
