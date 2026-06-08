@@ -3,11 +3,25 @@
   "specSource": "docs/superpowers/specs/2026-06-07-map-navigation-app-design.md",
   "autopilotSpec": ".omc/autopilot/spec.md",
   "teamSize": 5,
-  "reviewGate": ["architect", "code-reviewer", "security-reviewer", "advisor"],
-  "constraints": ["free-tier-only", "no-mac-no-device", "web-first-verification"],
-  "currentPhase": "P5",
-  "currentStage": "planning",
-  "p3Done": { "status": "done", "finalCommit": "dcee447", "tests": 649, "fixRounds": "0 review + 1 advisor (reroute stay-off-route retry)" },
+  "reviewGate": [
+    "architect",
+    "code-reviewer",
+    "security-reviewer",
+    "advisor"
+  ],
+  "constraints": [
+    "free-tier-only",
+    "no-mac-no-device",
+    "web-first-verification"
+  ],
+  "currentPhase": "COMPLETE",
+  "currentStage": "done-all-phases",
+  "p3Done": {
+    "status": "done",
+    "finalCommit": "dcee447",
+    "tests": 649,
+    "fixRounds": "0 review + 1 advisor (reroute stay-off-route retry)"
+  },
   "keyDeviceQaBacklog": [
     "P3: 실 GPS cadence/accuracy, 백그라운드 추적 지속, 실 이동 이탈→재탐색 런타임, 안내 중 화면 wake",
     "P3: 이탈 임계/도착 반경/재탐색 디바운스 상수 튜닝(실 GPS 노이즈)",
@@ -20,7 +34,13 @@
     "전반: 카카오/구글/네이버 API 키 발급 후 실데이터 동작, 네이티브 지도(Kakao/MapLibre RN) 디바이스 렌더, iOS EAS 빌드"
   ],
   "p3p5Caveat": "사용자 결정(2026-06-08): 환경 없이 P3·P5 진행. '검증됨'=typecheck+mock 테스트+웹 export까지만. 실기기 GPS/백그라운드/음성/실시간 동작은 미검증 — 키+에뮬레이터 확보 후 별도 QA 필요. 각 게이트 결과에 이 한계 명시.",
-  "phaseOrder": ["P1", "P2", "P4", "P3", "P5"],
+  "phaseOrder": [
+    "P1",
+    "P2",
+    "P4",
+    "P3",
+    "P5"
+  ],
   "phaseOrderNote": "사용자 결정(2026-06-08): P3(GPS 네비)는 실기기 검증 불가 절벽 — 키+에뮬레이터 환경 후. P4(Valhalla)는 로컬 Docker로 실검증 가능하여 선행",
   "carryForward": [
     "P3 계획 게이트 필수: 실-모드 분기를 가진 모든 핸들러/서비스는 fetch 모킹 실-모드 테스트 필수 (데모 모드 테스트는 핸들러 커버리지로 불인정) — P1·P2 공통 결함 패턴",
@@ -28,13 +48,80 @@
     "P3 Foundation에서 워커 간 중복 유틸 통합 (parseDurationSec, decodePolyline, isIntercity, [lng,lat] mappers)"
   ],
   "phases": {
-    "P1": { "status": "done", "plan": ".omc/plans/autopilot-impl-p1.md", "approvedBy": ["architect", "code-reviewer", "security-reviewer", "advisor"], "finalCommit": "6e7fdad", "tests": 162 },
-    "P2": { "status": "done", "plan": ".omc/plans/autopilot-impl-p2.md", "approvedBy": ["architect", "code-reviewer", "security-reviewer", "advisor"], "finalCommit": "11a173d", "tests": 401, "fixRounds": 1 },
-    "P4": { "status": "done", "plan": ".omc/plans/autopilot-impl-p4.md", "approvedBy": ["architect", "code-reviewer", "security-reviewer", "advisor"], "finalCommit": "33e1836", "tests": 540, "fixRounds": 1, "note": "라이브 Valhalla e2e + 분기 단언. costing 역전 수정" },
-    "P3": { "status": "done", "plan": ".omc/plans/autopilot-impl-p3.md", "approvedBy": ["architect", "code-reviewer", "security-reviewer", "advisor"], "finalCommit": "dcee447", "tests": 649, "fixRounds": "0 review + 1 advisor" },
-    "P5": { "status": "planned", "plan": ".omc/plans/autopilot-impl-p5.md" }
+    "P1": {
+      "status": "done",
+      "plan": ".omc/plans/autopilot-impl-p1.md",
+      "approvedBy": [
+        "architect",
+        "code-reviewer",
+        "security-reviewer",
+        "advisor"
+      ],
+      "finalCommit": "6e7fdad",
+      "tests": 162
+    },
+    "P2": {
+      "status": "done",
+      "plan": ".omc/plans/autopilot-impl-p2.md",
+      "approvedBy": [
+        "architect",
+        "code-reviewer",
+        "security-reviewer",
+        "advisor"
+      ],
+      "finalCommit": "11a173d",
+      "tests": 401,
+      "fixRounds": 1
+    },
+    "P4": {
+      "status": "done",
+      "plan": ".omc/plans/autopilot-impl-p4.md",
+      "approvedBy": [
+        "architect",
+        "code-reviewer",
+        "security-reviewer",
+        "advisor"
+      ],
+      "finalCommit": "33e1836",
+      "tests": 540,
+      "fixRounds": 1,
+      "note": "라이브 Valhalla e2e + 분기 단언. costing 역전 수정"
+    },
+    "P3": {
+      "status": "done",
+      "plan": ".omc/plans/autopilot-impl-p3.md",
+      "approvedBy": [
+        "architect",
+        "code-reviewer",
+        "security-reviewer",
+        "advisor"
+      ],
+      "finalCommit": "dcee447",
+      "tests": 649,
+      "fixRounds": "0 review + 1 advisor"
+    },
+    "P5": {
+      "status": "done",
+      "plan": ".omc/plans/autopilot-impl-p5.md",
+      "approvedBy": [
+        "architect",
+        "code-reviewer",
+        "security-reviewer",
+        "advisor"
+      ],
+      "finalCommit": "41c3987",
+      "tests": 714
+    }
   },
-  "qa": { "maxCycles": 5, "sameErrorLimit": 3 },
-  "validation": { "maxRounds": 3 },
-  "startedAt": "2026-06-07"
+  "qa": {
+    "maxCycles": 5,
+    "sameErrorLimit": 3
+  },
+  "validation": {
+    "maxRounds": 3
+  },
+  "startedAt": "2026-06-07",
+  "completedAt": "2026-06-08",
+  "totalTests": 714,
+  "releaseChecklist": "RELEASE-CHECKLIST.md"
 }

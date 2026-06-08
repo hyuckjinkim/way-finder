@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"pkill -f 'until.*pnpm install' 2>/dev/null; pkill -f 'until.*pgrep' 2>/dev/null; sleep 2; echo \\\"killed stale loops\\\"; pgrep -af \\\"pnpm install\\\" | head; echo \\\"---done check---\\\"\",\"descri...",
+  "error": "Exit code 144",
+  "timestamp": "2026-06-07T12:08:42.865Z",
+  "retry_count": 1
+}

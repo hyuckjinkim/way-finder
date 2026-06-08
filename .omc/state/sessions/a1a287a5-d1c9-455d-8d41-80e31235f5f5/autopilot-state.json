@@ -1,0 +1,10 @@
+{
+  "active": true,
+  "started_at": "2026-06-07T11:01:18.496Z",
+  "original_prompt": "진행하자. 그리고 Phase 순서대로 모두 진행하는거로하고, 진행 후에 advisor 등의 agent를 구성해서 검토하고 승인 후에 다음으로 자동으로 넘어가는걸로 하자. 모든 phase 완료될때까지 /autopilot 으로 하자. /team 5",
+  "session_id": "a1a287a5-d1c9-455d-8d41-80e31235f5f5",
+  "project_path": "/mnt/d/Workspace/wayfinder",
+  "reinforcement_count": 20,
+  "awaiting_confirmation_set_at": "2026-06-07T11:01:18.496Z",
+  "last_checked_at": "2026-06-07T13:45:24.228Z"
+}
