@@ -5,8 +5,9 @@
   "teamSize": 5,
   "reviewGate": ["architect", "code-reviewer", "security-reviewer", "advisor"],
   "constraints": ["free-tier-only", "no-mac-no-device", "web-first-verification"],
-  "currentPhase": "P4",
+  "currentPhase": "P3",
   "currentStage": "planning",
+  "p3p5Caveat": "사용자 결정(2026-06-08): 환경 없이 P3·P5 진행. '검증됨'=typecheck+mock 테스트+웹 export까지만. 실기기 GPS/백그라운드/음성/실시간 동작은 미검증 — 키+에뮬레이터 확보 후 별도 QA 필요. 각 게이트 결과에 이 한계 명시.",
   "phaseOrder": ["P1", "P2", "P4", "P3", "P5"],
   "phaseOrderNote": "사용자 결정(2026-06-08): P3(GPS 네비)는 실기기 검증 불가 절벽 — 키+에뮬레이터 환경 후. P4(Valhalla)는 로컬 Docker로 실검증 가능하여 선행",
   "carryForward": [
