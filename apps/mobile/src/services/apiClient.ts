@@ -1,15 +1,24 @@
 /**
  * D1 — API 클라이언트.
  *
- * EXPO_PUBLIC_API_URL env가 설정되면 실 프록시 모드, 미설정이면 데모 모드.
+ * EXPO_PUBLIC_PROXY_BASE_URL env가 설정되면 실 프록시 모드, 미설정이면 데모 모드.
  * EXPO_PUBLIC_ 접두사 변수는 Metro/Expo가 빌드 시 정적으로 인라인하므로
  * process.env 직접 참조가 정석이다(expo-constants 불필요).
  */
 
-/** 프록시 베이스 URL. undefined이면 데모 모드. */
+/**
+ * 프록시 베이스 URL. undefined이면 데모 모드.
+ *
+ * `EXPO_PUBLIC_PROXY_BASE_URL`이 정식 이름이다(.env.example·app.config.ts·문서·RELEASE-CHECKLIST
+ * 가 모두 이 이름을 안내). 과거 코드가 쓰던 `EXPO_PUBLIC_API_URL`은 레거시 폴백으로만 유지한다.
+ * 변수명이 어긋나면 키를 넣어도 앱이 계속 데모 모드로 동작하므로 정식 이름을 먼저 읽는다.
+ * 점 표기(`process.env.X`) 접근만 Metro가 정적 인라인하므로 점 표기를 사용한다.
+ */
 const API_BASE_URL: string | undefined =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (process.env as any)['EXPO_PUBLIC_API_URL'] as string | undefined;
+  ((process.env as any).EXPO_PUBLIC_PROXY_BASE_URL as string | undefined) ??
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ((process.env as any).EXPO_PUBLIC_API_URL as string | undefined);
 
 /**
  * 데모 모드 플래그.
