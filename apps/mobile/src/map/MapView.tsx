@@ -15,6 +15,7 @@ import {
 } from 'react';
 import type { MapViewProps, MapViewRef } from '@wayfinder/shared';
 import { useRegionRenderer } from './RegionProvider.js';
+import { MapErrorBoundary } from './MapErrorBoundary.js';
 import MapViewKakao from './MapView.kakao.js';
 import MapViewMapLibre from './MapView.maplibre.js';
 
@@ -39,8 +40,13 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(function MapView(
     [],
   );
 
+  // 한국 영역은 Kakao 네이티브를 우선 쓰되, terminal 버전(2.2.7)의 디바이스 렌더 실패에
+  // 대비해 에러 바운더리로 감싸 MapLibre로 degrade한다(MapLibre는 무키·한국 커버·동일 계약).
+  // 폴백으로 전환되면 implRef가 자연히 MapLibre 구현을 가리켜 flyTo/fitBounds가 계속 동작한다.
   return renderer === 'korea' ? (
-    <MapViewKakao ref={implRef} {...props} />
+    <MapErrorBoundary fallback={<MapViewMapLibre ref={implRef} {...props} />}>
+      <MapViewKakao ref={implRef} {...props} />
+    </MapErrorBoundary>
   ) : (
     <MapViewMapLibre ref={implRef} {...props} />
   );
