@@ -10,14 +10,11 @@ compatibility_flags = ["nodejs_compat"]
 # 로컬/dry-run에서는 placeholder id로 충분.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "00000000000000000000000000000000"
+id = "5aa4e9d60ce946df88338e544cc5a9bb"
 
 # 비밀이 아닌 런타임 플래그. 키 미설정 시 앱은 데모 모드로 동작 (스트림 A5).
 [vars]
 DEMO_MODE = "auto"
 
-# 실 시크릿(여기에 값을 넣지 말 것 — 문서용 목록):
-#   wrangler secret put KAKAO_REST_KEY
-#   wrangler secret put GOOGLE_PLACES_KEY
-#   wrangler secret put NAVER_CLIENT_ID
-#   wrangler secret put NAVER_CLIENT_SECRET
+# 실 시크릿(여기에 값을 넣지 말 것): Workspace/key-lib/keys.env + 루트 .env → `scripts/env-sync.sh --deploy`로 일괄 업로드.
+# 이름 목록은 src/config.ts의 Env / key-lib/keys.env.example 참조.
