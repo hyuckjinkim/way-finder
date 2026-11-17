@@ -3,7 +3,7 @@
  *
  * C2 RouteInputScreen에 어댑터로 배선(화면 시그니처 불변, 어댑터는 라우트 파일).
  * onSubmit(RouteRequest) → D2 routeStore에 stops·mode·preference·maxExtraMinutes 기록 후 /route/result로 이동.
- * provider는 화면 기본값(mockPlaceProvider)을 그대로 사용 — 데모 모드에서 mock 데이터가 흐른다.
+ * provider = PlaceService(실 프록시, 데모 모드면 내부에서 mock) — 화면 기본값(mock)을 쓰면 배포본이 항상 mock.
  *
  * P4 D1: RouteOptionsBar 슬롯 배선. B 스트림 완료 전 placeholder stub 사용.
  */
@@ -11,6 +11,7 @@ import React, { useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import type { RoutePreference, RouteRequest } from '@wayfinder/shared';
 import { RouteInputScreen } from '../../src/screens/RouteInputScreen';
+import * as PlaceService from '../../src/services/PlaceService';
 import { useRouteStore } from '../../src/state/routeStore';
 import { RouteOptionsBar } from '../../src/route/RouteOptionsBar';
 import { OverlayPanel } from '../../src/components/OverlayPanel';
@@ -55,7 +56,7 @@ export default function RouteInputRoute() {
         onPreferenceChange={onPreferenceChange}
         onMaxExtraMinutesChange={onMaxExtraMinutesChange}
       />
-      <RouteInputScreen onSubmit={onSubmit} onCancel={onCancel} />
+      <RouteInputScreen provider={PlaceService} onSubmit={onSubmit} onCancel={onCancel} />
     </OverlayPanel>
   );
 }
