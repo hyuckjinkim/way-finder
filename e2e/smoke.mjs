@@ -45,7 +45,9 @@ const mapSig = (page) => page.evaluate(() => {
 // Kakao draws polylines as SVG <path> with a stroke inside the map container.
 const polylines = (page) => page.evaluate(() =>
   [...document.querySelectorAll('svg path')].filter((p) => {
-    const s = p.getAttribute('stroke'); return s && s !== 'none' && (p.getAttribute('d') || '').length > 20;
+    // Kakao sets stroke via attribute or inline style depending on version — use the computed value.
+    const s = p.getAttribute('stroke') || getComputedStyle(p).stroke;
+    return s && s !== 'none' && (p.getAttribute('d') || '').length > 20;
   }).length);
 
 const text = (page) => page.evaluate(() => document.body.innerText);
