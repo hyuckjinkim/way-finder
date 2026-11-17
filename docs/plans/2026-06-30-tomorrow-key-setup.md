@@ -10,23 +10,16 @@
 
 ## 1. 프록시 시크릿 주입 (Cloudflare Workers) — 약 10분
 
-`services/proxy`에서 실행. 시크릿 이름은 `services/proxy/src/config.ts:13-30`의 `Env`와 1:1 일치 (이미 전부 실배선됨).
+> **갱신(2026-11-18):** 키 값은 **Workspace 공용 `key-lib/keys.env`**에만 둔다(발급 절차: `key-lib/keys.env.example`). 프로젝트 루트 `.env`는 설정·별칭만(`cp .env.example .env`).
+> 유료 가능 키(구글·카카오모빌리티)는 비워도 된다 — 설계 §11 "국내 전용 구성".
 
 ```bash
-cd services/proxy
-wrangler login                       # 최초 1회
-
-# 8개 시크릿 (값은 각 콘솔에서 발급)
-wrangler secret put KAKAO_REST_KEY        # Kakao Developers REST 키 (Local 검색·블로그)
-wrangler secret put GOOGLE_PLACES_KEY     # Google Cloud — Places API
-wrangler secret put NAVER_CLIENT_ID       # Naver Developers
-wrangler secret put NAVER_CLIENT_SECRET
-wrangler secret put KAKAO_MOBILITY_KEY    # Kakao Mobility — 자동차 경로
-wrangler secret put TMAP_APP_KEY          # TMAP(SK) — 도보·자전거
-wrangler secret put GOOGLE_ROUTES_KEY     # Google Cloud — Routes API
-wrangler secret put ODSAY_API_KEY         # ODsay — 대중교통/시외
+cd services/proxy && npx wrangler login     # 최초 1회
+cd ../.. && scripts/env-sync.sh --deploy    # 앱 .env + .dev.vars 생성 + 값 있는 프록시 키만 `wrangler secret bulk` 업로드
 # (MAPBOX_TOKEN은 현재 미사용 — GAP4. 글로벌 라우팅은 Google Routes 사용. 넣어도 효과 없음.)
 ```
+
+`env-sync.sh` 없이 하려면 `wrangler secret put <NAME>` — 이름은 `services/proxy/src/config.ts`의 `Env`와 1:1.
 
 **KV 네임스페이스**: `services/proxy/wrangler.toml:13`의 placeholder id를 실제 발급 id로 교체.
 
@@ -34,7 +27,7 @@ wrangler secret put ODSAY_API_KEY         # ODsay — 대중교통/시외
 wrangler kv namespace create CACHE        # 출력된 id를 wrangler.toml의 id = "0000…" 자리에 교체
 ```
 
-`DEMO_MODE`는 `wrangler.toml`에서 `"auto"` — 키가 하나라도 비면 그 경로만 데모로 graceful degradation (`config.ts:isDemoMode`). 전체 실모드를 강제하려면 `"false"`.
+`DEMO_MODE`는 `wrangler.toml`에서 `"auto"` — 기능별 판정(`config.ts`): 장소는 카카오 REST 키만 있으면 실 모드(구글·네이버 키 없으면 구글 탭·해외 검색 / 네이버 블로그만 빈 결과), 길찾기는 모드별 공급자 키만 본다(국내 자동차=카카오모빌리티, 도보=TMAP, 자전거=Valhalla(VALHALLA_URL), 대중교통=ODsay, 해외=Google Routes). 전체 실모드를 강제하려면 `"false"`.
 
 배포: `wrangler deploy` → 배포 URL을 2단계에서 사용.
 
@@ -42,7 +35,7 @@ wrangler kv namespace create CACHE        # 출력된 id를 wrangler.toml의 id 
 
 ## 2. 앱 env (Expo) — 약 5분  ⚠️ GAP1 수정 반영됨
 
-루트 `.env`(.local) 또는 셸 env. **정식 변수명은 `EXPO_PUBLIC_PROXY_BASE_URL`** (이 세션에서 `apiClient.ts`가 이 이름을 읽도록 수정 — 이전엔 `EXPO_PUBLIC_API_URL`만 읽어 키를 넣어도 데모 모드에 머무는 버그가 있었음. 레거시 이름도 폴백으로 계속 동작).
+키는 `key-lib/keys.env`, 프록시 URL은 루트 `.env` → `scripts/env-sync.sh`가 `apps/mobile/.env` 생성 (Expo는 `app.config.ts`가 있는 `apps/mobile/`의 `.env`만 읽음). **정식 변수명은 `EXPO_PUBLIC_PROXY_BASE_URL`** (이 세션에서 `apiClient.ts`가 이 이름을 읽도록 수정 — 이전엔 `EXPO_PUBLIC_API_URL`만 읽어 키를 넣어도 데모 모드에 머무는 버그가 있었음. 레거시 이름도 폴백으로 계속 동작).
 
 ```bash
 # .env.example 참조

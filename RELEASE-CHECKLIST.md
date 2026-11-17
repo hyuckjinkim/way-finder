@@ -30,17 +30,24 @@ curl -X POST localhost:8002/route -H 'content-type: application/json' \
 
 ## 1. API 키 발급 (실 데이터 동작 — 약 30분)
 
-| 서비스 | 용도 | 무료 한도 | 주입 |
-|--------|------|-----------|------|
-| Kakao Developers | 지도(JS/네이티브)·Local 검색·블로그 | 일 수만 건 | JS키=앱 env, REST=`wrangler secret` |
-| Google Cloud | 글로벌 Places·Routes·교통 | **SKU별 월 한도 — 콘솔에서 일일 쿼터 하드캡 필수**(과금 차단) | `wrangler secret` |
-| Naver Developers | 블로그 검색 | 25,000/일 | `wrangler secret` |
-| Kakao Mobility | 자동차 다중경유지(P2) | 확인 | `wrangler secret` |
-| TMAP (SK) | 도보·자전거 경로(P2) | 확인 | `wrangler secret` |
-| ODsay | 대중교통·시외(P2) | 일 1,000건 | `wrangler secret` |
-| Cloudflare | Workers/Pages·KV | 일 10만 | `wrangler login` + KV 생성 |
+주입: 키 값은 `/mnt/d/Workspace/key-lib/keys.env`(발급 절차 포함 템플릿: `keys.env.example`), 프로젝트 설정은 루트 `.env` → `scripts/env-sync.sh` (로컬) / `scripts/env-sync.sh --deploy` (Workers 시크릿 업로드).
 
-> 무료 티어 정책: 구글은 **반드시 콘솔에서 쿼터 하드캡** + 예산 알림. 초과 시 과금이 아니라 호출 실패 → 앱은 graceful degradation.
+**무료 — 한도 초과 시 차단만, 자동 과금 없음**
+
+| 서비스 | 용도 | 무료 한도 |
+|--------|------|-----------|
+| Kakao Developers | 지도(JS/네이티브)·Local 검색·블로그 | 일 수만 건 |
+| NAVER API HUB (네이버 클라우드, 개발자센터 신규 종료) | 블로그 검색 — 선택 키 | 한시적 무료 (유료 도입 시 공지) |
+| TMAP (SK) | 도보 경로(P2) — 자전거 API 없음, 자전거는 자체 Valhalla | 1,000/일 (유료 요금제는 직접 가입 시에만) |
+| ODsay | 대중교통·시외(P2) | 일 1,000건 |
+| Cloudflare | Workers/Pages·KV | 요청 일 10만 (KV 쓰기는 일 1,000) |
+
+**유료 가능 — 선택, 비워도 됨** (빠지는 기능: 설계 §11 "국내 전용 구성")
+
+| 서비스 | 용도 | 과금 위험 |
+|--------|------|-----------|
+| Google Cloud | 구글 탭(평점·리뷰)·해외 검색·해외 길찾기 | **초과 시 카드 자동 과금** — 쓰려면 콘솔 일일 쿼터 하드캡 필수 |
+| Kakao Mobility | 국내 자동차 다중경유지(P2) | 상업적 이용은 쿼터 내라도 제휴 계약 필요 |
 
 ## 2. 디바이스 / 에뮬레이터 QA (코드로 검증 불가 — 실행 필요)
 
@@ -61,7 +68,7 @@ curl -X POST localhost:8002/route -H 'content-type: application/json' \
 - [ ] 자동차/자전거 실 GPS 네비 런타임(턴 안내·이탈·재탐색·음성 동기)
 - [ ] **voice × reroute seam (advisor — 어느 단일 테스트도 안 덮음)**: 재탐색이 step 인덱스를 리셋할 때 새 경로의 첫 턴이 정상 안내되는가, 아니면 "동일 step"으로 잘못 억제되는가 — 합성 테스트 가능하나 미작성, 우선 디바이스 확인
 - [ ] 카카오 car `guides[]` 실 형식(x/y 좌표계·type 코드표)·Google `navigationInstruction` 필드마스크/maneuver enum — car/bike step 추출 정합(픽스처는 지식 기반·실 형식 미보장)
-- [ ] TMAP 자전거 maneuver 추출 가능 여부 — bike 턴 카드 vs 폴리라인 폴백 결정
+- [x] ~~TMAP 자전거 maneuver~~ — TMAP에 자전거 API 없음(2026-11-18 실측) → 국내 자전거는 Valhalla `bicycle`(maneuvers 포함). 배포용 Valhalla 호스팅 필요
 - [ ] 실시간 교통 무료 티어 viability(Google traffic-aware 상위 SKU·카카오 무료 범위) — 라이브 교통 진행 여부 결정
 
 ### 전반

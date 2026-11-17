@@ -8,6 +8,11 @@
 > ② open question (c) 해소 → 지도 라이브러리 에러 바운더리 폴백(Kakao 실패 시 MapLibre). 내일 키 추가·검증 절차는
 > [tomorrow-key-setup 가이드](./2026-06-30-tomorrow-key-setup.md) 참조. 검증: mobile typecheck + 356 tests green.
 >
+> **업데이트(2026-11-18):** 구글 Places·Routes, 카카오모빌리티는 **선택 키**로 전환 — 비우면 해당 기능만 빠지고 무료 키 기능은
+> 실 모드 유지(이전엔 구글 키 하나 없으면 장소 전체, 카카오모빌리티 없으면 국내 도보·자전거까지 데모로 떨어짐 — 수정·회귀 테스트).
+> → **국내 전용이면 STAGE 1의 Google 단계 전체 생략 가능(0원 무조건)**. 키 원본은 Workspace 공용 `key-lib/keys.env`, 프로젝트 `.env`는 설정·별칭 → `scripts/env-sync.sh`로 일원화.
+> 구성표·한계: [설계 §11 국내 전용 구성](../superpowers/specs/2026-06-07-map-navigation-app-design.md), VWorld 타일 검토: 설계 §5.
+>
 > **목적.** Phase 1–5가 전부 구현·테스트(약 714개 green)됐으나 로컬 Valhalla를 제외하면 전부 **mock 경계 안**에서만 검증됨.
 > 이 문서는 `free-tier-only · Mac 없음 · 실기기 없음 · web-first` 제약 하에서 **돈을 거의 안 쓰고** 실동작으로 넘어가는 순서를 정의한다.
 >
@@ -60,7 +65,7 @@
   - ✅ 2025-03-01부터 $200 크레딧 폐지 → SKU별 월 free usage cap 체계
   - → **한국 실시간 교통은 Kakao로, Google은 기본 라우팅만.**
 - [ ] **나머지 한국 API 키 발급** — ⚠️ **무료 한도·캡 메커니즘 미검증(open question), 발급 시 직접 확인**
-  - ⚠️ Naver 검색(블로그), TMAP(도보·자전거 경로), ODsay(대중교통·시외), Kakao Mobility(자동차 다중경유지)
+  - ⚠️ Naver 검색(블로그), TMAP(도보 경로 — 자전거 API 없음), ODsay(대중교통·시외), Kakao Mobility(자동차 다중경유지)
   - 각 콘솔에서 일일 한도와 "초과 시 차단 vs 자동 과금" 정책을 확인하고 본 문서 표를 업데이트할 것
 - [ ] **Cloudflare** — Workers/Pages·KV (`wrangler login` + KV 생성, 일 10만 무료)
 
@@ -90,7 +95,7 @@ deep-research에서 3표 검증을 통과하지 못한 항목. **검증된 사�
 
 - [ ] **(a) Naver / TMAP(SK) / ODsay 2026 무료 한도·캡 메커니즘** — Google식 "fail-instead-of-charge" 캡이 있는지 불명
 - [x] **(c) Kakao 지도 RN 라이브러리 상태 — 해소(2026-06-29).** 추가 조사 결과 `@react-native-kakao/map` 2.2.7은 **terminal 버전**: 모노레포 v2.3.0에서 `"remove map package + fix 0.77 android build error"` 커밋으로 map 패키지가 제거됨(업그레이드 경로 없음, 유지보수 네이티브 대안 없음). 앱은 RN0.85.3 → 디바이스 깨짐 리스크. **대응: 에러 바운더리 폴백 추가**(`MapErrorBoundary.tsx`, Kakao 실패 시 MapLibre로 degrade). silent blank는 디바이스 QA로만 확인 가능 (잔여 리스크 명시)
-- [ ] **(d) 턴바이턴 응답 실 형식** — Kakao car `guides[]` 좌표계/type 코드표, Google Routes `navigationInstruction` 필드마스크·maneuver enum, TMAP 자전거 maneuver 추출 가능 여부 (1차 소스 일부 unreliable)
+- [ ] **(d) 턴바이턴 응답 실 형식** — Kakao car `guides[]` 좌표계/type 코드표, Google Routes `navigationInstruction` 필드마스크·maneuver enum, ~~TMAP 자전거 maneuver~~ (TMAP 자전거 API 없음 → Valhalla, 2026-11-18) (1차 소스 일부 unreliable)
 - [ ] **(e) Google SKU별 월 free-event 정확 수치** — post-2025-03 모델에서 wayfinder가 호출하는 SKU별 무료 한도를 알아야 일일 쿼터 캡을 free cap 안쪽으로 사이징 가능
 
 ---

@@ -41,6 +41,7 @@ Phase별로 별도의 구현 계획을 수립한다. 이 문서의 구현 범위
 | 지도 렌더링 | **하이브리드**: 한국=Kakao SDK, 글로벌=MapLibre | 한국 지도 품질(POI·건물·라벨)이 OSM 대비 압도적 — PoC(poc/map-compare)로 비교 확인 후 결정 |
 | 라우팅 API | 한국=카카오 모빌리티(자동차)+TMAP(도보)+ODsay(대중교통·시외), 글로벌=Google Routes/Mapbox | 한국 대중교통은 국내 API 필수 (구글 길찾기 자동차 미지원). 카카오모빌리티는 도보 미제공 → TMAP 보행자 API 편입 |
 | 장소 정보 | 기본정보=카카오 Local, 평점·리뷰=구글 Places(5개), 블로그=네이버+카카오 검색 API, 전체 리뷰=딥링크 | 카카오·네이버 리뷰 본문은 공식 API 미제공. 크롤링은 약관 위반이라 배제 |
+| 유료 가능 키 = 선택 (2026-11-18) | 구글 Places·Routes, 카카오모빌리티는 **비워도 됨** — 해당 기능만 빠지고 나머지는 실 모드 유지 | 국내 전용 운영 시 구글 비용 0원. 게이트는 기능·모드별(`config.ts` `isDemoMode`/`isRouteDemoMode`) — §11 "국내 전용 구성" |
 | 백엔드 | Cloudflare Workers (Hono, TypeScript) | API 키 보호 필수(Phase 1부터), 무료 티어, 엣지 캐싱 |
 | 상태관리 | Zustand + TanStack Query | 경량 + API 캐싱 |
 | 커스텀 라우팅(Phase 4) | 자체 호스팅 Valhalla + OSM + 공공데이터(가로등·유동인구) | 상용 API는 비용 함수 커스터마이즈 불가. "+N분"은 alternatives 필터로 구현 |
@@ -124,6 +125,28 @@ interface MapViewRef {
 2. 한국 웹 화면(Kakao JS)은 네이티브 SDK의 근사치 → Android 에뮬레이터로 보완
 3. 구현체 4개 = 테스트 매트릭스 4배 → 인터페이스를 좁게 유지하는 것이 방어선
 
+### 국내 타일 대안: VWorld (검토만, 미채택 — 2026-11-18)
+
+**전제 정정:** 지도 렌더링에 구글맵은 쓰지 않는다(한국=Kakao, 글로벌=MapLibre+OpenFreeMap, 키 불필요).
+구글의 국내 역할은 장소 상세 **구글 탭(평점·리뷰)뿐**이고, VWorld는 리뷰를 제공하지 않으므로 구글 대체재가 아니다.
+
+VWorld(국토교통부 공간정보 오픈플랫폼)가 들어갈 자리는 **국내 배경지도 타일**이다:
+`@react-native-kakao/map` 2.2.7이 RN 0.85에서 깨질 수 있는 terminal 버전이라(§12), 네이티브에서 Kakao 실패 시
+현재 `MapErrorBoundary`가 MapLibre+OpenFreeMap(OSM — 국내 POI·라벨 빈약)으로 폴백한다. 이 폴백의 국내 소스를
+VWorld 래스터 타일로 바꾸면 네이티브 라이브러리 의존 없이 국내 지도 품질을 일부 회복할 수 있다.
+
+| 항목 | 상태 |
+|------|------|
+| 엔드포인트 `https://api.vworld.kr/req/wmts/1.0.0/{key}/…` 존재·키 검증 | ✅ 실측 (무효 키 → "등록되지 않은 인증키입니다" XML) |
+| 레이어명(`Base`/`Hybrid`/`Satellite` 등), `{z}/{y}/{x}` 순서, 확장자, 줌 범위 | ⚠️ 미검증 — GetCapabilities로 확인 |
+| 일일 호출 한도, 개발키↔운영키 구분 | ⚠️ 미검증 |
+| 모바일 앱 호출 시 도메인 검사(`domain` 파라미터/Referer) | ⚠️ 미검증 — 키가 앱 번들에 노출됨 |
+| 상업적 이용 조건 | ⚠️ 미검증 — 약관 확인 필요 |
+| 커버리지 | 국내 전용 → 해외는 기존 OpenFreeMap 유지 |
+
+채택 시 작업: MapLibre 스타일에 VWorld raster source 추가(국내 bbox) + `EXPO_PUBLIC_VWORLD_KEY`. Kakao SDK를
+완전히 대체할지(구현체 4→2, 로드뷰 상실) vs 폴백 소스로만 쓸지는 디바이스 QA 결과로 결정한다.
+
 ## 6. 백엔드 프록시
 
 ### 엔드포인트
@@ -179,7 +202,7 @@ interface PlaceDetail extends Place {
 |------|------|--------|------------|
 | 자동차 | 카카오모빌리티 다중경유지 API (`/v1/waypoints/directions`) | Google Routes (≤25) / Mapbox | **네이티브 지원** |
 | 도보 | TMAP 보행자 경로 API | Google Routes / Mapbox | 네이티브 지원, 미지원 구간은 leg-chaining |
-| 자전거 | TMAP/카카오 확인 후 결정 (Phase 2 계획 시) | Google Routes / Mapbox | 동상 |
+| 자전거 | 자체 Valhalla `bicycle` (2026-11-18: TMAP 자전거 API 부재 실측 — 기존 TMAP 배선 제거) | Google Routes / Mapbox | 동상 |
 | 대중교통 | ODsay | Google Routes (transit) | **leg-chaining** (아래) |
 
 ### 대중교통 경유지 = leg-chaining
@@ -237,9 +260,27 @@ ODsay 도시간 검색은 도시간 구간(예: 서울역→부산역)만 반환
 
 개발~소규모 사용자 단계는 0원. 과금 노출 지점은 두 곳: 구글 API(사용자 증가 시), Phase 4 서버(고정비).
 
+### 국내 전용 구성 — 유료 가능 키 없이 운영 (2026-11-18)
+
+유료 가능 키는 **선택**이다. 비우면 아래 기능만 빠지고, 무료 키 기능은 실 모드로 남는다
+(회귀 테스트: `services/proxy/src/optionalPaidKeys.test.ts`).
+
+| 비운 키 | 빠지는 기능 | 영향 없음 |
+|---------|-------------|-----------|
+| `GOOGLE_PLACES_KEY` | 장소 상세 구글 탭(평점·리뷰) → 빈 결과, 해외 장소 검색 → 빈 결과 | 국내 검색(카카오)·블로그 탭(네이버·카카오) |
+| `GOOGLE_ROUTES_KEY` | 해외 길찾기 → "미지원" 안내 | 국내 전 모드 |
+| `KAKAO_MOBILITY_KEY` | 국내 자동차 길찾기 → "미지원" 안내 | 국내 도보(TMAP)·자전거(Valhalla)·대중교통(ODsay) |
+| `NAVER_CLIENT_ID/SECRET` | 블로그 탭의 네이버 부분 → 빈 결과 | 나머지 전부 (2026-11-18: API HUB 이관·한시적 무료라 선택 키로 전환) |
+
+- 카카오모빌리티는 **상업적 이용 시 무료 쿼터 내라도 사전 제휴 계약 필요**(카카오 데브톡 공식 답변) → 출시 전 결정 항목.
+- 경로 키 부재 처리(사용자 결정 2026-11-18): 앱이 실 모드(카카오 REST 키 있음)인데 모드별 경로 키만 없으면 프록시가
+  **501 `MODE_UNAVAILABLE`**(`config.ts` `routeGate`) → 앱 결과 화면이 "이 이동수단 미지원" 안내(재시도 없음).
+  키 0개 개발 환경(앱 전체 데모)에서만 mock 경로. 가짜 경로가 실사용자에게 보이지 않는다.
+- 후속(미구현): 이동수단 탭을 사전에 비활성화하려면 지원 모드 조회 엔드포인트(예: `GET /v1/capabilities`)가 필요.
+
 | 서비스 | 무료 한도 | 초과 시 |
 |--------|----------|---------|
-| Kakao 지도/Local/검색, 네이버 블로그 검색 | 일 수만 건 무료 (네이버 25,000/일) | 사실상 무료 운영 가능 |
+| Kakao 지도/Local/검색, 네이버 블로그 검색 | 카카오 일 수만 건 무료. 네이버는 2026-07 NAVER API HUB 이관 후 "한시적 무료" | 네이버는 유료 도입 시 재검토 (선택 키) |
 | ODsay (대중교통) | 일 1,000건 | 유료 플랜 협의 |
 | MapLibre + OpenFreeMap | 무제한 무료 | — |
 | Cloudflare Workers/Pages | 일 10만 요청 | $5/월~ |
@@ -258,7 +299,7 @@ ODsay 도시간 검색은 도시간 구간(예: 서울역→부산역)만 반환
 
 | 리스크 | 대응 |
 |--------|------|
-| `@react-native-kakao/map` 유지보수 중단 | 인터페이스 뒤에 격리되어 있어 직접 네이티브 모듈로 교체 가능 |
-| 구글 Places 과금 증가 | 프록시 캐싱 + 월 예산 알림 설정, 리뷰 섹션 lazy load |
+| `@react-native-kakao/map` 유지보수 중단 (**현실화** — 2.2.7 terminal, RN 0.85 빌드 위험) | 인터페이스 뒤에 격리. `MapErrorBoundary`로 MapLibre 폴백 적용됨. 국내 품질 회복안 = VWorld 타일(§5, 검토 중) |
+| 구글 Places 과금 증가 | 프록시 캐싱 + 일일 쿼터 하드캡, 리뷰 섹션 lazy load. 국내 전용이면 키를 비워 원천 차단(§11) |
 | 실기기 없는 네이티브 검증 한계 | Android 에뮬레이터 + EAS 빌드, 출시 전 실기기 확보 필요 (명시적 한계) |
 | 한국 bbox 단순 판정의 오차 (독도·이어도 등) | Phase 1은 단순 bbox로 충분, 문제 보고 시 폴리곤 판정으로 교체 |

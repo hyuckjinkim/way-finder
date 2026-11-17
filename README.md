@@ -2,7 +2,12 @@
 
 카카오맵/구글맵 같은 지도 + 길찾기 앱. **iOS / Android / 웹을 하나의 코드베이스(Expo)로 동시 제공**한다. 한국은 카카오 생태계, 글로벌은 Google/Mapbox 생태계를 결합한 하이브리드 구조로, 장기적으로 자체 라우팅 엔진 기반의 차별화된 경로 옵션(풍경·안전·한적한 경로, +N분 필터)을 제공하는 것이 목표.
 
-> ⚠️ **상태: Phase 1~5 구현·테스트 완료(약 714 테스트 green), 그러나 아직 아무도 실행하지 않았다.** 실 지도 렌더·실 경로(로컬 Valhalla 제외)·GPS·음성·실시간 교통은 **API 키 발급(~30분) + 디바이스 QA**를 거쳐야 실체화된다. 출시 전 반드시 **[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)**를 실행할 것.
+**웹 데모: https://wayfinder-awh.pages.dev** (프록시: `https://wayfinder-proxy.hyuckjin.workers.dev`)
+
+> **상태 (2026-11-18):** Phase 1~5 구현 완료. 웹 배포에서 실데이터로 확인된 것 — 카카오 지도 렌더, 장소 검색(카카오),
+> 블로그(네이버·카카오), 도보 경로(TMAP). 아직 미동작 — 대중교통(ODsay가 IP 키라 Workers에서 인증 실패 → 앱 직접 호출로 전환 예정),
+> 자전거(Valhalla가 로컬 전용), 자동차·구글(유료 가능 키라 꺼 둠 → "미지원" 안내). GPS·음성·네이티브는 디바이스 QA 필요 —
+> **[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)**.
 
 ## 로드맵
 
@@ -54,12 +59,23 @@
 | 데이터 | 소스 |
 |--------|------|
 | 기본정보 (이름·주소·전화·카테고리) | 카카오 Local API |
-| 평점 + 리뷰 본문 (최대 5개) | 구글 Places API |
-| 블로그 글 | 네이버 블로그 검색 API + 카카오(Daum) 블로그 검색 API |
+| 평점 + 리뷰 본문 (최대 5개) | 구글 Places API (**선택** — 유료 가능, 키 없으면 구글 탭만 비움) |
+| 블로그 글 | 네이버 블로그 검색(NAVER API HUB) + 카카오(Daum) 블로그 검색 API |
 | 거리뷰 | 카카오 로드뷰 (SDK 내장) |
 | 전체 리뷰 | 카카오맵/네이버 플레이스 딥링크 |
 
 글로벌은 구글 Places(정보+평점+리뷰) + 구글 스트리트뷰로 단순화.
+
+### 경로 공급자
+
+| 모드 | 한국 | 글로벌 |
+|------|------|--------|
+| 도보 | TMAP 보행자 (+ 커스텀 프로필은 자체 Valhalla) | Google Routes |
+| 자전거 | 자체 Valhalla `bicycle` (TMAP엔 자전거 API 없음) | Google Routes |
+| 대중교통 | ODsay (시내 leg-chaining, 시외 스티칭) | Google Routes |
+| 자동차 | 카카오모빌리티 (**선택** — 상업 이용 시 제휴 필요) | Google Routes (**선택**) |
+
+모드별 키가 없으면: 키가 하나도 없는 개발 환경은 목(mock) 경로, 실 모드 앱에서는 **501 `MODE_UNAVAILABLE` → "이 이동수단 미지원" 안내**(가짜 경로 금지).
 카카오맵·네이버 플레이스의 리뷰 본문은 공식 API로 제공되지 않으므로 크롤링하지 않고 딥링크로 연결한다(약관·차단 리스크 회피).
 
 ### 기술 스택
@@ -84,18 +100,21 @@ wayfinder/
 ├── packages/
 │   └── shared/            # @wayfinder/shared — 정규화 타입 + MapView 인터페이스 + 목 픽스처 + region 판정
 ├── apps/
-│   └── mobile/            # @wayfinder/mobile — Expo (RN + web). 현재 MapView stub만 (스트림 E가 본설치)
+│   └── mobile/            # @wayfinder/mobile — Expo (RN + web) 앱
 ├── services/
-│   └── proxy/             # @wayfinder/proxy — Cloudflare Workers + Hono. 현재 placeholder worker
+│   ├── proxy/             # @wayfinder/proxy — Cloudflare Workers + Hono (키 보관·정규화·캐시)
+│   └── valhalla/          # 자체 라우팅 엔진 Docker (로컬, 수도권 타일)
 ├── scripts/
-│   └── secret-scan.sh     # 하드코딩 키 차단 게이트 (CI)
+│   ├── secret-scan.sh     # 하드코딩 키 차단 게이트 (CI)
+│   ├── env-sync.sh        # key-lib → apps/mobile/.env + services/proxy/.dev.vars (+ --deploy: Workers 시크릿)
+│   └── deploy-web.sh      # 프록시(Workers) + 웹(Pages) 배포
 └── poc/
     └── map-compare/       # MapLibre(OSM) vs 카카오맵 지도 품질 비교 PoC
 ```
 
 ## 개발 (빌드/테스트 명령)
 
-> 키 0개로 전체 게이트가 통과한다 (데모 모드). 실 API 키는 `wrangler secret` + 앱 env로 별도 주입.
+> 키 0개로 전체 게이트가 통과한다 (데모 모드).
 
 ```bash
 # Node 22 (.nvmrc), pnpm 11. pnpm 미설치 시: corepack enable && corepack prepare pnpm@latest --activate
@@ -110,3 +129,31 @@ pnpm --filter @wayfinder/proxy deploy:dry   # wrangler dry-run (키 불요)
 ```
 
 > **WSL2(/mnt/d) 주의:** Metro/웹 watch에는 `WATCHPACK_POLLING=true CHOKIDAR_USEPOLLING=true`가 필요하다(inotify 미지원). 심볼릭 링크 취약 → `nodeLinker: hoisted` 사용.
+
+## API 키 · 환경변수
+
+키와 설정 값은 **이 레포 밖** `/mnt/d/Workspace/key-lib`에 둔다 (여러 프로젝트 공용, 레포에는 값 없음).
+
+| 파일 | 내용 |
+|------|------|
+| `key-lib/keys.env` | 공용 API 키 (범용 이름 `KAKAO_JS_KEY` 등). 발급 링크·절차는 `keys.env.example` |
+| `key-lib/wayfinder.env` | 이 프로젝트 설정 — 프록시 URL, `${KAKAO_JS_KEY}` 같은 별칭, 유료 기능 스위치 |
+
+```bash
+scripts/env-sync.sh              # → apps/mobile/.env, services/proxy/.dev.vars 생성 (로컬 개발)
+cd services/proxy && npx wrangler dev   # 로컬 프록시 http://localhost:8787
+```
+
+무료 키만으로 동작한다: 카카오(필수) · 네이버 API HUB · TMAP · ODsay. 구글·카카오모빌리티는 **유료 가능 → 선택**
+(비우면 해당 기능만 빠짐, 설계 §11 "국내 전용 구성").
+
+## 배포
+
+```bash
+scripts/deploy-web.sh   # 시크릿 업로드 → 프록시 배포 → 웹 빌드(프록시 URL 주입) → Pages 배포
+```
+
+- 웹: Cloudflare Pages `wayfinder` → https://wayfinder-awh.pages.dev
+- 프록시: Cloudflare Workers `wayfinder-proxy` (KV `wayfinder-cache`), CORS 전체 허용 + rate limit
+- 카카오 콘솔: 앱 > 플랫폼 키 > JavaScript 키 > **JavaScript SDK 도메인**에 배포 도메인 등록 필요
+
