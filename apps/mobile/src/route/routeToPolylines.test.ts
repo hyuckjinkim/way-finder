@@ -53,12 +53,12 @@ describe('routeToPolylines — 기본', () => {
 describe('routeToPolylines — 모드·노선별 색상', () => {
   it('walk leg는 도보 색상', () => {
     const polylines = routeToPolylines(WALK_SIMPLE);
-    expect(polylines[0]?.color).toBe('#888888');
+    expect(polylines[0]?.color).toBe('#8A8F98');
   });
 
   it('bike leg는 자전거 색상', () => {
     const polylines = routeToPolylines(BIKE_SIMPLE);
-    expect(polylines[0]?.color).toBe('#4CAF50');
+    expect(polylines[0]?.color).toBe('#2E9E5B');
   });
 
   it('car leg는 자동차 색상', () => {
@@ -94,14 +94,32 @@ describe('routeToPolylines — 모드·노선별 색상', () => {
 });
 
 describe('routeToPolylines — 선 두께', () => {
-  it('walk는 가는 선(3)', () => {
+  it('walk는 가는 선(4)', () => {
     const polylines = routeToPolylines(WALK_SIMPLE);
-    expect(polylines[0]?.width).toBe(3);
+    expect(polylines[0]?.width).toBe(4);
   });
 
-  it('transit는 두꺼운 선(5)', () => {
+  it('transit는 두꺼운 선(6)', () => {
     const polylines = routeToPolylines(TRANSIT_CHAIN);
-    expect(polylines[0]?.width).toBe(5);
+    expect(polylines[0]?.width).toBe(6);
+  });
+});
+
+describe('routeToPolylines — 점선·lineColor', () => {
+  it('walk leg만 dashed', () => {
+    const polylines = routeToPolylines(TRANSIT_CHAIN);
+    TRANSIT_CHAIN.legs.forEach((leg, i) => {
+      expect(polylines[i]?.dashed === true).toBe(leg.mode === 'walk');
+    });
+  });
+
+  it('transit.lineColor가 있으면 lineType 기본색보다 우선', () => {
+    const subway = TRANSIT_CHAIN.legs[0]!;
+    const route = {
+      ...TRANSIT_CHAIN,
+      legs: [{ ...subway, transit: { ...subway.transit!, lineColor: '#00A84D' } }],
+    };
+    expect(routeToPolylines(route)[0]?.color).toBe('#00A84D');
   });
 });
 

@@ -17,8 +17,8 @@ import type { BBox, LatLng } from '@wayfinder/shared';
 
 /** 이동 수단별 기본 선 색상. */
 const MODE_COLOR: Record<TravelMode, string> = {
-  walk: '#888888',    // 회색 — 도보
-  bike: '#4CAF50',    // 녹색 — 자전거
+  walk: '#8A8F98',    // 회색 — 도보 (점선)
+  bike: '#2E9E5B',    // 녹색 — 자전거
   car: '#1a73e8',     // 파란색 — 자동차
   transit: '#E53935', // 빨간색 — 대중교통 기본 (노선별 오버라이드)
 };
@@ -35,14 +35,14 @@ const TRANSIT_LINE_COLOR: Record<NonNullable<TransitMeta['lineType']>, string> =
 /** 모드·노선별 색상 결정. */
 function colorForLeg(leg: RouteLeg): string {
   if (leg.mode === 'transit' && leg.transit) {
-    return TRANSIT_LINE_COLOR[leg.transit.lineType];
+    return leg.transit.lineColor ?? TRANSIT_LINE_COLOR[leg.transit.lineType];
   }
   return MODE_COLOR[leg.mode];
 }
 
 /** 모드별 선 두께. */
 function widthForLeg(leg: RouteLeg): number {
-  return leg.mode === 'walk' ? 3 : 5;
+  return leg.mode === 'walk' ? 4 : leg.mode === 'transit' ? 6 : 5;
 }
 
 /**
@@ -60,6 +60,7 @@ export function routeToPolylines(route: Route): MapPolyline[] {
     coords: leg.coords,
     color: colorForLeg(leg),
     width: widthForLeg(leg),
+    ...(leg.mode === 'walk' ? { dashed: true } : {}),
   }));
 }
 

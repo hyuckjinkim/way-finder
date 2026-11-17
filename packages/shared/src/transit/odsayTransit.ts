@@ -54,6 +54,10 @@ export interface OdsayPath {
     totalDistance?: number;
     busTransitCount?: number;
     subwayTransitCount?: number;
+    /** 총 요금(원). */
+    payment?: number;
+    /** loadLane 보간점 API의 mapObject 파라미터 값. */
+    mapObj?: string;
   };
   subPath: OdsaySubPath[];
 }
@@ -64,6 +68,25 @@ export interface OdsayTransitResponse {
     path?: OdsayPath[];
   };
 }
+
+/** ODsay subwayCode → 노선 공식색. */
+const SUBWAY_COLOR: Record<number, string> = {
+  1: '#0052A4', 2: '#00A84D', 3: '#EF7C1C', 4: '#00A4E3', 5: '#996CAC', 6: '#CD7C2F',
+  7: '#747F00', 8: '#E6186C', 9: '#BDB092', 91: '#9A6292', 101: '#0090D2', 104: '#77C4A3',
+  107: '#56AD2D', 108: '#178C72', 109: '#D31145', 110: '#FD8100', 112: '#0054A6',
+  113: '#B7C450', 114: '#8FC31F', 115: '#A17800', 116: '#FABE00', 117: '#6789CA',
+  21: '#8CADCB', 22: '#F06A00', 31: '#007448', 41: '#D93F5C', 42: '#00AA80', 43: '#FFB100',
+  48: '#0066B3', 51: '#009088', 71: '#F06A00', 72: '#81BF48', 73: '#BB8C00', 74: '#217DCB',
+  78: '#0066B3', 79: '#8451A0',
+};
+
+/** ODsay 버스 type → 색. 공식 서울 버스 hex를 찾지 못해 근사값이다(간선/지선/마을/순환/광역/공항). */
+const BUS_COLOR: Record<number, string> = {
+  11: '#3D5BAB', 6: '#3D5BAB', 26: '#3D5BAB',
+  12: '#53B332', 3: '#8BBD33', 13: '#F2B70A',
+  14: '#E60012', 4: '#E60012', 15: '#E60012',
+  5: '#00A0E9',
+};
 
 /** trafficType=3(도보) 판정. */
 const TRAFFIC_WALK = 3;
@@ -118,25 +141,25 @@ function subPathToLeg(sp: OdsaySubPath): RouteLeg {
     return { start, end, mode: 'walk', durationSec, distanceM, coords };
   }
 
-  const lineName = sp.lane?.[0]?.name ?? sp.lane?.[0]?.busNo ?? '';
+  const lane = sp.lane?.[0];
+  const lineName = lane?.name ?? lane?.busNo ?? '';
+  const code = sp.trafficType === TRAFFIC_SUBWAY ? lane?.subwayCode : lane?.type;
+  const lineColor = code === undefined ? undefined : (sp.trafficType === TRAFFIC_SUBWAY ? SUBWAY_COLOR : BUS_COLOR)[code];
   const transit: TransitMeta = {
     lineName,
     lineType: laneType(sp.trafficType),
+    ...(lineColor ? { lineColor } : {}),
     ...(sp.way ? { headsign: sp.way } : {}),
   };
   return { start, end, mode: 'transit', durationSec, distanceM, coords, transit };
 }
 
-/**
- * ODsay 응답의 첫 경로(path[0])를 RouteLeg[]로 정규화한다.
- * 경로가 없으면 빈 배열을 반환한다 (호출자가 명시적 에러 처리 — silent failure 금지).
- */
-export function normalizeOdsayTransit(
-  res: OdsayTransitResponse,
+/** ODsay path 한 건 → RouteLeg[]. subPath가 없으면 빈 배열(호출자가 명시적 에러 처리 — silent failure 금지). */
+export function normalizeOdsayPath(
+  path: OdsayPath | undefined,
   from?: LatLng,
   to?: LatLng,
 ): RouteLeg[] {
-  const path = res.result?.path?.[0];
   if (!path || !Array.isArray(path.subPath)) return [];
   const legs = path.subPath.map(subPathToLeg);
   // 실 ODsay 도보 subPath(trafficType 3)는 좌표가 없다(2026-11-18 실측) → 0,0 대신
@@ -146,5 +169,37 @@ export function normalizeOdsayTransit(
     const start = legs[i - 1]?.end ?? from ?? leg.start;
     const end = legs[i + 1]?.start ?? to ?? leg.end;
     return { ...leg, start, end, coords: [start, end] };
+  });
+}
+
+/** ODsay 응답의 첫 경로(path[0])를 RouteLeg[]로 정규화한다. */
+export function normalizeOdsayTransit(
+  res: OdsayTransitResponse,
+  from?: LatLng,
+  to?: LatLng,
+): RouteLeg[] {
+  return normalizeOdsayPath(res.result?.path?.[0], from, to);
+}
+
+/** ODsay loadLane 응답 — lane[]은 mapObject의 구간 순서(= 대중교통 subPath 순서). */
+export interface OdsayLoadLaneResponse {
+  result?: { lane?: { section?: { graphPos?: { x: number; y: number }[] }[] }[] };
+}
+
+/**
+ * loadLane 실제 선형을 대중교통 leg coords로 치환한다.
+ * lane 수 ≠ 대중교통 leg 수면 대응을 신뢰할 수 없어 원본 그대로 반환한다.
+ */
+export function applyLaneGeometry(legs: RouteLeg[], res: OdsayLoadLaneResponse): RouteLeg[] {
+  const lanes = res.result?.lane;
+  const transitCount = legs.filter((l) => l.mode === 'transit').length;
+  if (!lanes || lanes.length !== transitCount) return legs;
+  let k = 0;
+  return legs.map((leg) => {
+    if (leg.mode !== 'transit') return leg;
+    const pts = (lanes[k++]?.section ?? [])
+      .flatMap((sec) => sec.graphPos ?? [])
+      .map((g) => ({ lat: g.y, lng: g.x }));
+    return pts.length >= 2 ? { ...leg, coords: pts } : leg;
   });
 }

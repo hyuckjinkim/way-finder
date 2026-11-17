@@ -1,6 +1,9 @@
 export { koreaTransitRoute } from './koreaTransit.js';
 export {
   normalizeOdsayTransit,
+  normalizeOdsayPath,
+  applyLaneGeometry,
+  type OdsayLoadLaneResponse,
   type OdsayLane,
   type OdsaySubPath,
   type OdsayPath,
