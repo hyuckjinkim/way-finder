@@ -44,4 +44,6 @@ export const capabilitiesPath = '/v1/capabilities';
 /** `GET capabilitiesPath` 응답. 지역별 실제 경로를 낼 수 있는 모드 목록. */
 export interface Capabilities {
   modes: { kr: string[]; global: string[] };
+  /** 도보 선호(걷기 좋은·안전·한적) — Valhalla가 있어야 동작. */
+  walkPreferences: boolean;
 }

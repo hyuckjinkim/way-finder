@@ -15,6 +15,9 @@ export function handleCapabilities(c: Context<{ Bindings: Env }>): Response {
   // 한국 대중교통은 웹 앱이 ODsay를 직접 호출하므로 프록시 키 유무와 무관하게 지원.
   const kr = real('kr');
   if (!kr.includes('transit')) kr.push('transit');
-  const body: Capabilities = { modes: { kr: MODES.filter((m) => kr.includes(m)), global: real('global') } };
+  const body: Capabilities = {
+    modes: { kr: MODES.filter((m) => kr.includes(m)), global: real('global') },
+    walkPreferences: Boolean(c.env.VALHALLA_URL),
+  };
   return c.json(body);
 }

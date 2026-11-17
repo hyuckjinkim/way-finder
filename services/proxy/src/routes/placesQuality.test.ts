@@ -206,9 +206,14 @@ describe('GET /v1/places/search — 품질 개선', () => {
 });
 
 describe('GET /v1/capabilities', () => {
+  it('VALHALLA_URL이 있으면 도보 선호 지원', async () => {
+    const res = await call(capabilitiesPath, { DEMO_MODE: 'auto', VALHALLA_URL: 'http://v', CACHE: makeKV() });
+    expect(((await res.json()) as { walkPreferences: boolean }).walkPreferences).toBe(true);
+  });
+
   it('키 없음(auto) — kr은 transit만(웹 직접 ODsay), global 비어 있음', async () => {
     const res = await call(capabilitiesPath, { DEMO_MODE: 'auto', CACHE: makeKV() });
-    expect(await res.json()).toEqual({ modes: { kr: ['transit'], global: [] } });
+    expect(await res.json()).toEqual({ modes: { kr: ['transit'], global: [] }, walkPreferences: false });
   });
 
   it('키 보유 모드만 포함', async () => {
@@ -217,6 +222,7 @@ describe('GET /v1/capabilities', () => {
     });
     expect(await res.json()).toEqual({
       modes: { kr: ['walk', 'transit'], global: ['walk', 'transit', 'car', 'bike'] },
+      walkPreferences: false,
     });
   });
 });
