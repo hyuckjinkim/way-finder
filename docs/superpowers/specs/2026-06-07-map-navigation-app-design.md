@@ -43,6 +43,7 @@ Phase별로 별도의 구현 계획을 수립한다. 이 문서의 구현 범위
 | 장소 정보 | 기본정보=카카오 Local, 평점·리뷰=구글 Places(5개), 블로그=네이버+카카오 검색 API, 전체 리뷰=딥링크 | 카카오·네이버 리뷰 본문은 공식 API 미제공. 크롤링은 약관 위반이라 배제 |
 | 유료 가능 키 = 선택 (2026-11-18) | 구글 Places·Routes, 카카오모빌리티는 **비워도 됨** — 해당 기능만 빠지고 나머지는 실 모드 유지 | 국내 전용 운영 시 구글 비용 0원. 게이트는 기능·모드별(`config.ts` `isDemoMode`/`isRouteDemoMode`) — §11 "국내 전용 구성" |
 | 백엔드 | Cloudflare Workers (Hono, TypeScript) | API 키 보호 필수(Phase 1부터), 무료 티어, 엣지 캐싱 |
+| 키 위치 예외 (2026-11-18) | **웹의 국내 대중교통만 브라우저가 ODsay를 직접 호출**(URI 키, `@wayfinder/shared/transit`). 실패 시 프록시 폴백 | Workers는 고정 IP가 없어 ODsay Server 키(IP 제한) 인증 불가. URI 키는 등록 도메인에서만 동작하는 공개용 키(번들 노출 전제) — 공유 쿼터 1,000건/일 보호로 재시도 1회 |
 | 상태관리 | Zustand + TanStack Query | 경량 + API 캐싱 |
 | 커스텀 라우팅(Phase 4) | 자체 호스팅 Valhalla + OSM + 공공데이터(가로등·유동인구) | 상용 API는 비용 함수 커스터마이즈 불가. "+N분"은 alternatives 필터로 구현 |
 

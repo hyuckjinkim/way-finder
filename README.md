@@ -11,7 +11,7 @@
 검색·경로 입력은 지도를 가리지 않는 패널로 뜬다 — 폰은 상단 시트, 넓은 화면(≥768px)은 좌측 패널.
 
 > **상태 (2026-11-18):** Phase 1~5 구현 완료. 웹 배포에서 실데이터로 확인된 것 — 카카오 지도 렌더, 장소 검색(카카오),
-> 블로그(네이버·카카오), 도보 경로(TMAP). 아직 미동작 — 대중교통(ODsay가 IP 키라 Workers에서 인증 실패 → 앱 직접 호출로 전환 예정),
+> 블로그(네이버·카카오), 도보 경로(TMAP), 대중교통(ODsay, 브라우저 직접 호출). 아직 미동작 —
 > 자전거(Valhalla가 로컬 전용), 자동차·구글(유료 가능 키라 꺼 둠 → "미지원" 안내). GPS·음성·네이티브는 디바이스 QA 필요 —
 > **[RELEASE-CHECKLIST.md](./RELEASE-CHECKLIST.md)**.
 
@@ -78,7 +78,7 @@
 |------|------|--------|
 | 도보 | TMAP 보행자 (+ 커스텀 프로필은 자체 Valhalla) | Google Routes |
 | 자전거 | 자체 Valhalla `bicycle` (TMAP엔 자전거 API 없음) | Google Routes |
-| 대중교통 | ODsay (시내 leg-chaining, 시외 스티칭) | Google Routes |
+| 대중교통 | ODsay (시내 leg-chaining, 시외 스티칭) — **웹은 브라우저가 URI 키로 직접 호출**, 네이티브·로컬은 프록시(Server 키) | Google Routes |
 | 자동차 | 카카오모빌리티 (**선택** — 상업 이용 시 제휴 필요) | Google Routes (**선택**) |
 
 모드별 키가 없으면: 키가 하나도 없는 개발 환경은 목(mock) 경로, 실 모드 앱에서는 **501 `MODE_UNAVAILABLE` → "이 이동수단 미지원" 안내**(가짜 경로 금지).
