@@ -197,7 +197,7 @@ describe('GET /v1/places/:id — 실 모드 구글 응답 정규화', () => {
         return Promise.resolve({ ok: true, json: async () => GOOGLE_PLACE_DETAIL_RAW });
       }
       // 네이버 블로그
-      if (urlStr.includes('openapi.naver.com')) {
+      if (urlStr.includes('naverapihub.apigw.ntruss.com')) {
         return Promise.resolve({ ok: true, json: async () => NAVER_BLOG_SEARCH_RAW });
       }
       // 카카오 블로그
@@ -240,7 +240,7 @@ describe('GET /v1/blogs — 실 모드 (fetch 모킹)', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string | URL | Request) => {
       const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
-      if (urlStr.includes('openapi.naver.com')) {
+      if (urlStr.includes('naverapihub.apigw.ntruss.com')) {
         return Promise.resolve({ ok: true, json: async () => NAVER_BLOG_SEARCH_RAW });
       }
       if (urlStr.includes('dapi.kakao.com/v2/search/blog')) {
@@ -270,7 +270,7 @@ describe('GET /v1/places/:id — 구글 eager 병합 제거 (§11 lazy 방어선
       if (urlStr.includes('dapi.kakao.com/v2/local')) {
         return Promise.resolve({ ok: true, json: async () => KAKAO_LOCAL_SEARCH_RAW });
       }
-      if (urlStr.includes('openapi.naver.com')) {
+      if (urlStr.includes('naverapihub.apigw.ntruss.com')) {
         return Promise.resolve({ ok: true, json: async () => NAVER_BLOG_SEARCH_RAW });
       }
       if (urlStr.includes('dapi.kakao.com/v2/search/blog')) {

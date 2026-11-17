@@ -131,8 +131,20 @@ function subPathToLeg(sp: OdsaySubPath): RouteLeg {
  * ODsay 응답의 첫 경로(path[0])를 RouteLeg[]로 정규화한다.
  * 경로가 없으면 빈 배열을 반환한다 (호출자가 명시적 에러 처리 — silent failure 금지).
  */
-export function normalizeOdsayTransit(res: OdsayTransitResponse): RouteLeg[] {
+export function normalizeOdsayTransit(
+  res: OdsayTransitResponse,
+  from?: LatLng,
+  to?: LatLng,
+): RouteLeg[] {
   const path = res.result?.path?.[0];
   if (!path || !Array.isArray(path.subPath)) return [];
-  return path.subPath.map(subPathToLeg);
+  const legs = path.subPath.map(subPathToLeg);
+  // 실 ODsay 도보 subPath(trafficType 3)는 좌표가 없다(2026-11-18 실측) → 0,0 대신
+  // 이웃 leg의 정류장 좌표, 양 끝은 요청 출발·도착으로 채운다(직선 2점).
+  return legs.map((leg, i) => {
+    if (leg.coords.length > 0) return leg;
+    const start = legs[i - 1]?.end ?? from ?? leg.start;
+    const end = legs[i + 1]?.start ?? to ?? leg.end;
+    return { ...leg, start, end, coords: [start, end] };
+  });
 }

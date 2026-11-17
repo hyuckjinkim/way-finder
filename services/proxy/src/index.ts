@@ -16,6 +16,7 @@
  * 키 없이 데모 모드로 동작 (A5 config.ts).
  */
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { placesSearchPath, blogsPath, routesPath } from '@wayfinder/shared/api';
 import type { Env } from './config.js';
 import { rateLimitMiddleware } from './middleware/ratelimit.js';
@@ -28,6 +29,9 @@ import { dispatchRoutes } from './routes/modeHandlers.js';
 const app = new Hono<{ Bindings: Env }>();
 
 // 레이트리밋 (IP 단위, 60 req/min)
+// 웹 앱(Pages, 별도 origin)에서 호출. 키는 서버에만 있고 응답은 공개 데이터라 전체 허용.
+// ponytail: origin '*' — 남용이 보이면 Pages 도메인으로 좁힐 것 (curl 남용은 CORS가 못 막음 → ratelimit 담당).
+app.use('/v1/*', cors());
 app.use('/v1/*', rateLimitMiddleware);
 
 // 헬스 체크

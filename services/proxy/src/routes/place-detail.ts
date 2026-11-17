@@ -17,14 +17,13 @@ import {
   normalizeKakaoPlaceDetail,
   type KakaoLocalDocument,
 } from '../normalize/kakaoPlace.js';
-import { normalizeNaverBlogResponse, type NaverBlogResponse } from '../normalize/naverBlog.js';
+import { fetchNaverBlogs } from './blogs.js';
 import { normalizeKakaoBlogResponse, type KakaoBlogResponse } from '../normalize/kakaoBlog.js';
 import { cacheGetOrSet } from '../cache/kv.js';
 import { fetchWithFallback } from '../middleware/degradation.js';
 import type { PlaceDetail, BlogPost } from '@wayfinder/shared';
 
 const KAKAO_SEARCH_URL = 'https://dapi.kakao.com/v2/local/search/keyword.json';
-const NAVER_BLOG_URL = 'https://openapi.naver.com/v1/search/blog';
 const KAKAO_BLOG_URL = 'https://dapi.kakao.com/v2/search/blog';
 
 async function fetchKakaoDetail(kakaoId: string, key: string): Promise<KakaoLocalDocument | null> {
@@ -39,24 +38,6 @@ async function fetchKakaoDetail(kakaoId: string, key: string): Promise<KakaoLoca
 
   const data = (await res.json()) as { documents: KakaoLocalDocument[] };
   return data.documents[0] ?? null;
-}
-
-async function fetchNaverBlogs(q: string, env: Env): Promise<BlogPost[]> {
-  const url = new URL(NAVER_BLOG_URL);
-  url.searchParams.set('query', q);
-  url.searchParams.set('display', '5');
-  url.searchParams.set('sort', 'sim');
-
-  const res = await fetch(url.toString(), {
-    headers: {
-      'X-Naver-Client-Id': env.NAVER_CLIENT_ID,
-      'X-Naver-Client-Secret': env.NAVER_CLIENT_SECRET,
-    },
-  });
-  if (!res.ok) throw new Error(`Naver blog failed: ${res.status}`);
-
-  const data = (await res.json()) as NaverBlogResponse;
-  return normalizeNaverBlogResponse(data);
 }
 
 async function fetchKakaoBlogs(q: string, key: string): Promise<BlogPost[]> {

@@ -5,7 +5,7 @@
  * - 첫 Point feature properties.totalDistance(m)/totalTime(s) = 전체 합계.
  * - 보행자는 단일 leg로 합성 (TMAP은 경유지도 하나의 LineString 시퀀스로 반환).
  *
- * 자전거 정규화기(tmapBike)가 같은 GeoJSON 파서를 재사용하므로 mode 인자를 받는다.
+ * (과거 tmapBike가 같은 파서를 재사용 — TMAP 자전거 API 부재로 제거, 2026-11-18) mode 인자를 받는다.
  */
 import type { LatLng, TravelMode } from '@wayfinder/shared';
 import type { Route, RouteLeg } from '@wayfinder/shared';

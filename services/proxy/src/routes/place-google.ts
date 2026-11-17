@@ -112,6 +112,12 @@ export async function handlePlaceGoogle(c: Context<{ Bindings: Env }>): Promise<
     return c.json(payload);
   }
 
+  // 구글 키 선택(유료 가능) — 미설정 시 구글 탭만 비움 (스펙 §11 graceful degradation)
+  if (!c.env.GOOGLE_PLACES_KEY) {
+    const empty: GooglePlaceData = { reviews: [], rating: undefined };
+    return c.json(empty);
+  }
+
   // id 파싱: "kakao:12345" 또는 "google:ChIJ..."
   const colonIdx = rawId.indexOf(':');
   if (colonIdx === -1) {

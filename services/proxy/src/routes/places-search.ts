@@ -36,6 +36,7 @@ async function searchKakao(q: string, lat: number, lng: number, key: string): Pr
 }
 
 async function searchGoogle(q: string, lat: number, lng: number, key: string): Promise<Place[]> {
+  if (!key) return []; // 구글 키 선택(유료 가능) — 미설정 시 글로벌 검색만 빈 결과
   const res = await fetch(GOOGLE_SEARCH_URL, {
     method: 'POST',
     headers: {

@@ -11,7 +11,7 @@ import type { Route } from '@wayfinder/shared';
 
 import { KAKAO_MOBILITY_WAYPOINT_RAW } from '../../test/fixtures/kakaoMobility.js';
 import { TMAP_PEDESTRIAN_RAW } from '../../test/fixtures/tmapPedestrian.js';
-import { TMAP_BIKE_RAW } from '../../test/fixtures/tmapBike.js';
+import { WALK_SIMPLE_RAW } from '../fixtures/valhalla/index.js';
 import { GOOGLE_ROUTES_SIMPLE_RAW } from '../../test/fixtures/googleRoutes.js';
 
 function makeKV(): KVNamespace {
@@ -121,14 +121,16 @@ describe('POST /v1/routes — 실 모드 한국', () => {
     expect(route.legs[0]!.mode).toBe('walk');
   });
 
-  it('bike kr → TMAP 자전거 정규화', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true, json: async () => TMAP_BIKE_RAW,
-    }));
-    const res = await postRoute(KR, 'bike', realEnv());
+  it('bike kr → Valhalla bicycle (TMAP엔 자전거 API 없음)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => WALK_SIMPLE_RAW });
+    vi.stubGlobal('fetch', fetchMock);
+    const res = await postRoute(KR, 'bike', { ...realEnv(), VALHALLA_URL: 'http://valhalla.test' });
     expect(res.status).toBe(200);
     const route = (await res.json()) as Route;
     expect(route.legs[0]!.mode).toBe('bike');
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(String(url)).toBe('http://valhalla.test/route');
+    expect(JSON.parse((init as RequestInit).body as string).costing).toBe('bicycle');
   });
 });
 

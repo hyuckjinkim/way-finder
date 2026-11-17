@@ -50,27 +50,41 @@ export function createValhallaProvider(env: Env): ValhallaProvider {
       req: RouteRequest,
       costing: PedestrianCostingOptions,
     ): Promise<Route> {
-      const base = env.VALHALLA_URL;
-      if (!base) throw new Error('valhalla: VALHALLA_URL not configured');
-
-      const url = `${base.replace(/\/$/, '')}/route`;
-      let res: Response;
-      try {
-        res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(valhallaBody(req, costing)),
-        });
-      } catch (err) {
-        // 컨테이너 다운/네트워크 실패 — 명시적 에러(silent 금지).
-        throw new Error(
-          `valhalla: request failed (container down?) — ${(err as Error).message}`,
-        );
-      }
-      if (!res.ok) throw new Error(`valhalla: /route ${res.status}`);
-      return normalizeValhalla((await res.json()) as ValhallaRouteRaw);
+      return normalizeValhalla(await postValhalla(env, valhallaBody(req, costing)));
     },
   };
+}
+
+/** Valhalla `/route` POST (도보 커스텀·자전거 공용). @throws 미설정·컨테이너 다운·non-2xx. */
+async function postValhalla(env: Env, body: Record<string, unknown>): Promise<ValhallaRouteRaw> {
+  const base = env.VALHALLA_URL;
+  if (!base) throw new Error('valhalla: VALHALLA_URL not configured');
+
+  const url = `${base.replace(/\/$/, '')}/route`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    // 컨테이너 다운/네트워크 실패 — 명시적 에러(silent 금지).
+    throw new Error(
+      `valhalla: request failed (container down?) — ${(err as Error).message}`,
+    );
+  }
+  if (!res.ok) throw new Error(`valhalla: /route ${res.status}`);
+  return (await res.json()) as ValhallaRouteRaw;
+}
+
+/**
+ * 국내 자전거 경로 — Valhalla `bicycle` costing.
+ * TMAP에는 자전거 경로 API가 없음(2026-11-18 실측: /tmap/routes/bicycle → 게이트웨이 403, 같은 키로 pedestrian은 200).
+ */
+export async function fetchValhallaBike(req: RouteRequest, env: Env): Promise<Route> {
+  const locations = req.stops.map((s) => ({ lat: s.lat, lon: s.lng }));
+  return normalizeValhalla(await postValhalla(env, { locations, costing: 'bicycle' }), 'bike');
 }
 
 /**

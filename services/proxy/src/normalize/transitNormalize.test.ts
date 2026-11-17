@@ -117,3 +117,33 @@ describe('normalizeGoogleTransit', () => {
     expect(normalizeGoogleTransit(GOOGLE_TRANSIT_EMPTY_RAW)).toEqual([]);
   });
 });
+
+// 실 ODsay 응답 형태(2026-11-18 서울역→시청 실측, 좌표 외 필드 축약): 도보 subPath에 좌표가 없다.
+// 회귀: 이전엔 도보 leg가 start/end {0,0}·coords []로 정규화돼 지도에 (0,0)이 찍혔다.
+const ODSAY_REAL_SHAPE = {
+  result: { path: [{ pathType: 1, info: { totalTime: 5 }, subPath: [
+    { trafficType: 3, distance: 40, sectionTime: 1 },
+    { trafficType: 1, distance: 1100, sectionTime: 2, lane: [{ name: '수도권 1호선', subwayCode: 1 }],
+      startName: '서울역', startX: 126.972314, startY: 37.555942,
+      endName: '시청', endX: 126.977142, endY: 37.565364, way: '시청' },
+    { trafficType: 3, distance: 147, sectionTime: 2 },
+  ] }] },
+} as unknown as Parameters<typeof normalizeOdsayTransit>[0];
+
+describe('normalizeOdsayTransit — 실 응답: 좌표 없는 도보 subPath', () => {
+  const from = { lat: 37.5563, lng: 126.9723 };
+  const to = { lat: 37.5665, lng: 126.978 };
+  const legs = normalizeOdsayTransit(ODSAY_REAL_SHAPE, from, to);
+
+  it('어떤 leg도 (0,0) 좌표를 갖지 않는다', () => {
+    for (const leg of legs) {
+      for (const p of [leg.start, leg.end, ...leg.coords]) expect(p.lat).not.toBe(0);
+    }
+  });
+
+  it('첫 도보 = 출발지→승차역, 마지막 도보 = 하차역→도착지', () => {
+    expect(legs[0]).toMatchObject({ mode: 'walk', start: from, end: { lat: 37.555942, lng: 126.972314 } });
+    expect(legs[2]).toMatchObject({ mode: 'walk', start: { lat: 37.565364, lng: 126.977142 }, end: to });
+    expect(legs[0]!.coords).toHaveLength(2);
+  });
+});

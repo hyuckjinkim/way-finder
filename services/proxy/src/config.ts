@@ -38,41 +38,63 @@ export function isDemoMode(env: Env): boolean {
   const mode = (env.DEMO_MODE ?? 'auto').toLowerCase();
   if (mode === 'true') return true;
   if (mode === 'false') return false;
-  // "auto": 실 키가 전부 존재해야 실 모드
-  return !(
-    env.KAKAO_REST_KEY &&
-    env.GOOGLE_PLACES_KEY &&
-    env.NAVER_CLIENT_ID &&
-    env.NAVER_CLIENT_SECRET
-  );
+  // "auto": 카카오 REST 키가 있으면 실 모드.
+  // 구글·네이버는 선택 — 없으면 구글 탭·해외 검색 / 네이버 블로그만 빈 결과(호출부 가드).
+  // 네이버는 API HUB 이관 후 "한시적 무료"라 필수 키에서 제외(2026-11-18).
+  return !env.KAKAO_REST_KEY;
 }
 
 /**
  * 라우팅 데모 모드 여부 (A4). 지역·모드별로 필요한 공급자 키가 있는지 본다.
  * - DEMO_MODE='true'/'false'는 전역 강제 (장소와 동일 시맨틱).
- * - 'auto': 필수 키가 전부 있어야 실 모드. 하나라도 비면 데모(mockRouteProvider).
+ * - 'auto': 해당 모드의 공급자 키가 있으면 실 모드, 비면 데모(mockRouteProvider).
  *   - kr + transit  → ODsay 키 (시내·도시간 대중교통).
- *   - kr + 그 외     → 카카오모빌리티 + TMAP 키 (차/도보/자전거).
- *   - global        → Google Routes 키 (전 모드 공통).
+ *   - kr + car      → 카카오모빌리티 키 (유료 가능 — 비워도 다른 모드 영향 없음).
+ *   - kr + walk     → TMAP 키.
+ *   - kr + bike     → VALHALLA_URL (TMAP엔 자전거 API 없음 — 자체 호스팅 Valhalla bicycle).
+ *   - global        → Google Routes 키 (전 모드 공통, 유료 가능).
  *
  * 키 0개로 전체 빌드·테스트가 green이어야 하는 설계 원칙 준수.
- * mode 기본값은 'car' — 다이렉트 호출자는 기존 시그니처 그대로(인자 미전달) 사용한다.
+ * mode는 필수 — 기본값이 있으면 호출부가 누락해도 컴파일돼 모드별 게이트가 무력화된다.
  */
 export function isRouteDemoMode(
   env: Env,
   region: 'kr' | 'global',
-  mode: TravelMode = 'car',
+  mode: TravelMode,
 ): boolean {
   const demo = (env.DEMO_MODE ?? 'auto').toLowerCase();
   if (demo === 'true') return true;
   if (demo === 'false') return false;
   // "auto": 지역·모드별 필수 키가 전부 존재해야 실 모드
+  // 모드별 공급자 키만 본다 — 카카오모빌리티(유료 가능)가 없어도 도보·자전거(TMAP)는 실 모드.
   if (region === 'kr') {
-    return mode === 'transit'
-      ? !env.ODSAY_API_KEY
-      : !(env.KAKAO_MOBILITY_KEY && env.TMAP_APP_KEY);
+    if (mode === 'transit') return !env.ODSAY_API_KEY;
+    if (mode === 'car') return !env.KAKAO_MOBILITY_KEY;
+    if (mode === 'bike') return !env.VALHALLA_URL;
+    return !env.TMAP_APP_KEY;
   }
   return !env.GOOGLE_ROUTES_KEY;
+}
+
+/**
+ * 경로 요청 처리 방식.
+ * - 'real': 해당 모드 공급자 키 있음.
+ * - 'demo': 키 없음 + 앱 전체가 데모(무료 장소 키도 없음) → mock 경로 (키 0개 개발 흐름 유지).
+ * - 'unavailable': 앱은 실 모드인데 이 모드 키만 없음(유료 가능 키를 비운 국내 전용 운영 등)
+ *   → 가짜 경로를 실사용자에게 보이지 않도록 501 MODE_UNAVAILABLE.
+ */
+export function routeGate(
+  env: Env,
+  region: 'kr' | 'global',
+  mode: TravelMode,
+): 'real' | 'demo' | 'unavailable' {
+  if (!isRouteDemoMode(env, region, mode)) return 'real';
+  return isDemoMode(env) ? 'demo' : 'unavailable';
+}
+
+/** routeGate가 'unavailable'일 때의 응답 본문 (앱은 HTTP 501로 판별). */
+export function modeUnavailableBody(region: 'kr' | 'global', mode: TravelMode) {
+  return { error: `mode unavailable (${region}/${mode})`, code: 'MODE_UNAVAILABLE' } as const;
 }
 
 /**

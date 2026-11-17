@@ -90,4 +90,12 @@ describe('cacheGetOrSet', () => {
     expect(fetcher).not.toHaveBeenCalled();
     expect(result).toEqual({ name: 'cached' });
   });
+
+  it('빈 배열(공급자 실패 폴백)은 캐시하지 않는다 — 장애가 TTL 동안 고착되지 않게', async () => {
+    const kv = makeKV();
+    await cacheGetOrSet(kv, 'place', 'k', vi.fn().mockResolvedValue([]));
+    expect(kv._store.has('place:k')).toBe(false);
+    const recovered = await cacheGetOrSet(kv, 'place', 'k', vi.fn().mockResolvedValue([{ id: 1 }]));
+    expect(recovered).toEqual([{ id: 1 }]);
+  });
 });

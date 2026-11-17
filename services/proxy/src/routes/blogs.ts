@@ -15,19 +15,24 @@ import { cacheGetOrSet } from '../cache/kv.js';
 import { fetchWithFallback } from '../middleware/degradation.js';
 import type { BlogPost } from '@wayfinder/shared';
 
-const NAVER_BLOG_URL = 'https://openapi.naver.com/v1/search/blog';
+// 네이버 검색 API는 2026-07-31 개발자센터 신규 신청 종료 → NAVER API HUB(네이버 클라우드)로 이관.
+// 헤더도 X-Naver-Client-* → X-NCP-APIGW-API-KEY(-ID). 응답 구조(total/items)는 동일.
+const NAVER_BLOG_URL = 'https://naverapihub.apigw.ntruss.com/search/v1/blog';
 const KAKAO_BLOG_URL = 'https://dapi.kakao.com/v2/search/blog';
 
-async function fetchNaver(q: string, env: Env): Promise<BlogPost[]> {
+/** 네이버 블로그 검색 (blogs·place-detail 공용). 키 미설정이면 호출 없이 빈 결과 — 네이버는 선택 키. */
+export async function fetchNaverBlogs(q: string, env: Env): Promise<BlogPost[]> {
+  if (!env.NAVER_CLIENT_ID || !env.NAVER_CLIENT_SECRET) return [];
   const url = new URL(NAVER_BLOG_URL);
   url.searchParams.set('query', q);
   url.searchParams.set('display', '5');
   url.searchParams.set('sort', 'sim');
+  url.searchParams.set('format', 'json');
 
   const res = await fetch(url.toString(), {
     headers: {
-      'X-Naver-Client-Id': env.NAVER_CLIENT_ID,
-      'X-Naver-Client-Secret': env.NAVER_CLIENT_SECRET,
+      'X-NCP-APIGW-API-KEY-ID': env.NAVER_CLIENT_ID,
+      'X-NCP-APIGW-API-KEY': env.NAVER_CLIENT_SECRET,
     },
   });
   if (!res.ok) throw new Error(`Naver blog search failed: ${res.status}`);
@@ -71,7 +76,7 @@ export async function handleBlogs(c: Context<{ Bindings: Env }>): Promise<Respon
       `naver-search:${q}`,
       () =>
         fetchWithFallback(
-          () => fetchNaver(q, c.env),
+          () => fetchNaverBlogs(q, c.env),
           [] as BlogPost[],
           'naver-blog-search',
         ),

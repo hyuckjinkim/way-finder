@@ -8,7 +8,6 @@ import type { Route } from '@wayfinder/shared';
 
 import { normalizeKakaoMobility } from './kakaoMobility.js';
 import { normalizeTmapPedestrian } from './tmapPedestrian.js';
-import { normalizeTmapBike } from './tmapBike.js';
 import { normalizeGoogleRoutes } from './googleRoutes.js';
 import { normalizeMapboxDirections } from './mapboxDirections.js';
 
@@ -21,7 +20,6 @@ import {
   TMAP_PEDESTRIAN_RAW,
   TMAP_PEDESTRIAN_WAYPOINT_RAW,
 } from '../../test/fixtures/tmapPedestrian.js';
-import { TMAP_BIKE_RAW } from '../../test/fixtures/tmapBike.js';
 import {
   GOOGLE_ROUTES_WAYPOINT_RAW,
   GOOGLE_ROUTES_SIMPLE_RAW,
@@ -40,10 +38,6 @@ import {
   GOOGLE_CAR_STEPS_RAW,
   GOOGLE_CAR_NO_STEPS_RAW,
 } from '../../test/fixtures/googleCarSteps.js';
-import {
-  TMAP_BIKE_GUIDES_RAW,
-  TMAP_BIKE_NO_GUIDES_RAW,
-} from '../../test/fixtures/tmapBikeGuides.js';
 
 /** 서울 대략 bbox — kakao car step location 검증. */
 function inSeoul(p: { lat: number; lng: number }): boolean {
@@ -131,17 +125,6 @@ describe('normalizeTmapPedestrian', () => {
 
   it('빈 features → throw', () => {
     expect(() => normalizeTmapPedestrian({ features: [] })).toThrow();
-  });
-});
-
-// ── TMAP 자전거 (자전거, 한국) ──────────────────────────────────────────────
-describe('normalizeTmapBike', () => {
-  it('GeoJSON → 단일 bike leg', () => {
-    const route = normalizeTmapBike(TMAP_BIKE_RAW);
-    expectValidRoute(route);
-    expect(route.legs[0]!.mode).toBe('bike');
-    expect(route.totalDistanceM).toBe(1900);
-    expect(route.totalDurationSec).toBe(480);
   });
 });
 
@@ -277,25 +260,6 @@ describe('P5 F2 — Google navigationInstruction → RouteStep', () => {
 
   it('하위호환: navigationInstruction 부재 → steps 미부착 (폴리라인 동작 불변)', () => {
     const route = normalizeGoogleRoutes(GOOGLE_CAR_NO_STEPS_RAW, 'car');
-    expect(route.legs[0]!.steps).toBeUndefined();
-    expect(route.legs[0]!.coords.length).toBeGreaterThan(1);
-  });
-});
-
-describe('P5 F2 — tmap bike best-effort steps', () => {
-  it('turnType 보유 → steps 부착 (best-effort)', () => {
-    const route = normalizeTmapBike(TMAP_BIKE_GUIDES_RAW);
-    const steps = route.legs[0]!.steps!;
-    expect(steps).toHaveLength(3);
-    expect(steps[0]!.maneuver).toBe('depart'); // turnType 200
-    expect(steps[1]!.maneuver).toBe('turn-left'); // turnType 11
-    expect(steps[1]!.type).toBe(11); // raw 보존
-    expect(steps[2]!.maneuver).toBe('arrive'); // turnType 201
-    for (const s of steps) expect(inSeoul(s.location)).toBe(true);
-  });
-
-  it('하위호환: turnType 부재 → steps 미부착 (폴리라인 추종 graceful)', () => {
-    const route = normalizeTmapBike(TMAP_BIKE_NO_GUIDES_RAW);
     expect(route.legs[0]!.steps).toBeUndefined();
     expect(route.legs[0]!.coords.length).toBeGreaterThan(1);
   });

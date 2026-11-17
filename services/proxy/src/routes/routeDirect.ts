@@ -20,9 +20,9 @@ import type {
 import { routeRegion } from '@wayfinder/shared/region';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import type { Env } from '../config.js';
-import { isRouteDemoMode, isValhallaCustomRoute } from '../config.js';
+import { isValhallaCustomRoute, modeUnavailableBody, routeGate } from '../config.js';
 import { validateRouteBody, runProviderOrError } from './routeValidate.js';
-import { resolveValhallaCustomRoute } from './valhallaProvider.js';
+import { fetchValhallaBike, resolveValhallaCustomRoute } from './valhallaProvider.js';
 import {
   normalizeKakaoMobility,
   type KakaoMobilityRaw,
@@ -31,7 +31,6 @@ import {
   normalizeTmapPedestrian,
   type TmapGeoJsonRaw,
 } from '../normalize/tmapPedestrian.js';
-import { normalizeTmapBike } from '../normalize/tmapBike.js';
 import {
   normalizeGoogleRoutes,
   type GoogleRoutesRaw,
@@ -39,7 +38,6 @@ import {
 
 const KAKAO_MOBILITY_URL = 'https://apis-navi.kakaomobility.com/v1/waypoints/directions';
 const TMAP_PEDESTRIAN_URL = 'https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1';
-const TMAP_BIKE_URL = 'https://apis.openapi.sk.com/tmap/routes/bicycle?version=1';
 const GOOGLE_ROUTES_URL = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 
 /** Google travelMode 매핑 (다이렉트 모드 — transit 제외). */
@@ -132,16 +130,18 @@ async function fetchKorea(
     if (!res.ok) throw new Error(`kakaoMobility ${res.status}`);
     return normalizeKakaoMobility((await res.json()) as KakaoMobilityRaw);
   }
-  // walk / bike → TMAP
-  const url = mode === 'bike' ? TMAP_BIKE_URL : TMAP_PEDESTRIAN_URL;
+  // bike → Valhalla bicycle (TMAP엔 자전거 API 없음 — 2026-11-18 실측 게이트웨이 403)
+  if (mode === 'bike') return fetchValhallaBike(req, env);
+  // walk → TMAP
+  const url = TMAP_PEDESTRIAN_URL;
   const res = await fetch(url, {
     method: 'POST',
     headers: { appKey: env.TMAP_APP_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(tmapBody(req)),
   });
-  if (!res.ok) throw new Error(`tmap ${mode} ${res.status}`);
+  if (!res.ok) throw new Error(`tmap walk ${res.status}`);
   const raw = (await res.json()) as TmapGeoJsonRaw;
-  return mode === 'bike' ? normalizeTmapBike(raw) : normalizeTmapPedestrian(raw);
+  return normalizeTmapPedestrian(raw);
 }
 
 /** 글로벌 공급자 fetch+정규화 (Google Routes). */
@@ -192,8 +192,11 @@ export async function handleDirectRoute(
 
   const region = routeRegion(result.request.stops);
 
+  const gate = routeGate(c.env, region, mode);
+  if (gate === 'unavailable') return c.json(modeUnavailableBody(region, mode), 501);
+
   // 데모 모드 — 실 fetch 없이 mock provider.
-  if (isRouteDemoMode(c.env, region)) {
+  if (gate === 'demo') {
     const route = await mockRouteProvider.getRoute(result.request);
     return c.json(route);
   }

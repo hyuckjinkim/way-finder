@@ -6,7 +6,7 @@
  *   (Google=5와 달리 Valhalla=6 — precision 미파라미터화 시 좌표 10× 오차.)
  * - `leg.summary.time`(초) → durationSec, `leg.summary.length`(km) ×1000 → distanceM.
  * - 총합은 `trip.summary.time`(초)·`trip.summary.length`(km ×1000).
- * - mode는 항상 'walk' (Valhalla 커스텀 경로 = 한국·도보 전용, §8 명시적 한계).
+ * - mode 기본 'walk'(커스텀 도보 경로). 국내 자전거는 'bike'로 호출(fetchValhallaBike).
  *
  * 앱은 폴리라인을 디코드하지 않는다 — 정규화 레이어에서 1회 수행(C1 계승).
  * 빈 응답/형식 이상은 throw (silent 금지 — 핸들러 장애 격리가 명시적 502 처리).
@@ -116,7 +116,7 @@ function extractSteps(
  * Valhalla `/route` 응답 → Route. 각 trip.leg를 단일 walk RouteLeg로 매핑.
  * @throws trip/legs 누락 또는 leg shape 디코드 결과가 비면 (silent 금지).
  */
-export function normalizeValhalla(raw: ValhallaRouteRaw): Route {
+export function normalizeValhalla(raw: ValhallaRouteRaw, mode: 'walk' | 'bike' = 'walk'): Route {
   const trip = raw.trip;
   const rawLegs = trip?.legs ?? [];
   if (rawLegs.length === 0) throw new Error('valhalla: no legs in response');
@@ -129,7 +129,7 @@ export function normalizeValhalla(raw: ValhallaRouteRaw): Route {
     const routeLeg: RouteLeg = {
       start: coords[0]!,
       end: coords[coords.length - 1]!,
-      mode: 'walk',
+      mode,
       durationSec: Math.round(leg.summary?.time ?? 0),
       distanceM: Math.round((leg.summary?.length ?? 0) * KM_TO_M),
       coords,

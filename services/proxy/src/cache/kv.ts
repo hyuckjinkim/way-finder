@@ -81,6 +81,8 @@ export async function cacheGetOrSet<T>(
   const cached = await cacheGet<T>(kv, prefix, key);
   if (cached !== null) return cached;
   const value = await fetcher();
-  await cachePut(kv, prefix, key, value);
+  // 빈 배열은 캐시하지 않는다 — fetchWithFallback이 공급자 실패를 []로 대체하므로, 캐시하면 장애가 TTL(최대 24h) 동안 고착된다.
+  // ponytail: 정상 "결과 없음"도 매번 재조회 — 쿼터가 문제 되면 실패/빈결과를 구분하는 sentinel로 교체.
+  if (!(Array.isArray(value) && value.length === 0)) await cachePut(kv, prefix, key, value);
   return value;
 }

@@ -20,7 +20,7 @@ import type { Route, RouteLeg, RouteRequest, LatLng } from '@wayfinder/shared';
 import { routeRegion } from '@wayfinder/shared/region';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import type { Env } from '../config.js';
-import { isRouteDemoMode } from '../config.js';
+import { modeUnavailableBody, routeGate } from '../config.js';
 import { validateRouteBody, runProviderOrError } from './routeValidate.js';
 import {
   normalizeOdsayTransit,
@@ -57,7 +57,11 @@ async function fetchOdsaySegment(
   });
   const res = await fetch(`${ODSAY_URL}?${params.toString()}`);
   if (!res.ok) throw new Error(`odsay ${res.status}`);
-  return normalizeOdsayTransit((await res.json()) as OdsayTransitResponse);
+  const body = (await res.json()) as OdsayTransitResponse & { error?: unknown };
+  const legs = normalizeOdsayTransit(body, from, to);
+  // ODsay는 인증 실패(IP 미등록 등)도 HTTP 200 + error 본문 → 빈 경로 200으로 새던 결함. 502로 드러낸다.
+  if (legs.length === 0) throw new Error(`odsay: no path — ${JSON.stringify(body.error ?? 'empty result')}`);
+  return legs;
 }
 
 /**
@@ -143,8 +147,11 @@ export const routeTransit: RouteHandler = async (
 
   const region = routeRegion(result.request.stops);
 
+  const gate = routeGate(c.env, region, 'transit');
+  if (gate === 'unavailable') return c.json(modeUnavailableBody(region, 'transit'), 501);
+
   // 데모 모드 — 실 fetch 없이 mock provider (leg-chaining·시외 픽스처 선택은 provider가 담당).
-  if (isRouteDemoMode(c.env, region, 'transit')) {
+  if (gate === 'demo') {
     const route: Route = await mockRouteProvider.getRoute(result.request);
     return c.json(route);
   }
