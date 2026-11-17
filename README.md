@@ -4,6 +4,12 @@
 
 **웹 데모: https://wayfinder-awh.pages.dev** (프록시: `https://wayfinder-proxy.hyuckjin.workers.dev`)
 
+<img src="assets/screenshots/01-home.jpg" width="200"> <img src="assets/screenshots/02-search.jpg" width="200"> <img src="assets/screenshots/03-route-input.jpg" width="200">
+
+<img src="assets/screenshots/04-desktop-route.jpg" width="620">
+
+검색·경로 입력은 지도를 가리지 않는 패널로 뜬다 — 폰은 상단 시트, 넓은 화면(≥768px)은 좌측 패널.
+
 > **상태 (2026-11-18):** Phase 1~5 구현 완료. 웹 배포에서 실데이터로 확인된 것 — 카카오 지도 렌더, 장소 검색(카카오),
 > 블로그(네이버·카카오), 도보 경로(TMAP). 아직 미동작 — 대중교통(ODsay가 IP 키라 Workers에서 인증 실패 → 앱 직접 호출로 전환 예정),
 > 자전거(Valhalla가 로컬 전용), 자동차·구글(유료 가능 키라 꺼 둠 → "미지원" 안내). GPS·음성·네이티브는 디바이스 QA 필요 —
