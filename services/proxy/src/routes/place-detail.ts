@@ -84,11 +84,9 @@ export async function fetchKakaoDetail(
   if (!res.ok) throw new Error(`Kakao detail failed: ${res.status}`);
 
   const { documents } = (await res.json()) as { documents: KakaoLocalDocument[] };
-  return (
-    documents.find((d) => d.id === kakaoId) ??
-    (hint ? documents.find((d) => d.place_name === hint.name) : undefined) ??
-    null
-  );
+  // id 정확 일치만 인정 — 결과가 `kakao-detail:<id>` 공유 키로 캐시되므로, hint(클라이언트 입력)로
+  // 고른 다른 장소를 받으면 캐시 오염이 된다.
+  return documents.find((d) => d.id === kakaoId) ?? null;
 }
 
 async function fetchKakaoBlogs(q: string, key: string): Promise<BlogPost[]> {

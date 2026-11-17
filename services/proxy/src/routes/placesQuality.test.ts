@@ -65,13 +65,11 @@ describe('GET /v1/places/:id — 힌트로 카카오 상세 조회 (P0 404 회�
     expect(kw.searchParams.get('sort')).toBe('distance');
   });
 
-  it('id가 없으면 같은 이름의 가장 가까운 문서로 폴백', async () => {
+  it('id가 안 맞으면 이름이 같아도 404 — hint로 다른 장소를 공유 캐시 키에 넣지 않는다(캐시 오염)', async () => {
     stubFetch((u) =>
-      u.pathname.includes('keyword') ? { documents: [doc('1', '다른곳'), doc('2', '강남역 2호선'), doc('3', '강남역 2호선')] } : { documents: [] },
+      u.pathname.includes('keyword') ? { documents: [doc('1', '다른곳'), doc('2', '강남역 2호선')] } : { documents: [] },
     );
-    const res = await call(placeDetailPath('kakao:999', hint), realEnv());
-    expect(res.status).toBe(200);
-    expect(((await res.json()) as { id: string }).id).toBe('kakao:2');
+    expect((await call(placeDetailPath('kakao:999', hint), realEnv())).status).toBe(404);
   });
 
   it('id도 이름도 안 맞으면 404', async () => {
