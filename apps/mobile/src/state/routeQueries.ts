@@ -54,8 +54,9 @@ export function routeQueryOptions(
     queryFn: () => getRoute({ stops, mode, preference, maxExtraMinutes }),
     enabled: stops.length >= 2,
     staleTime: 60_000, // 1분
-    // 미지원(501)은 재시도해도 같은 결과 — 즉시 안내. 그 외는 TanStack 기본(3회).
-    retry: (failureCount, err) => !isModeUnavailable(err) && failureCount < 3,
+    // 미지원(501)은 재시도 무의미 — 즉시 안내. 그 외는 1회만: 웹 대중교통은 시도마다 ODsay 직접+프록시 호출이라
+    // 공유 쿼터(1,000건/일, 키가 번들에 공개)를 재시도가 곱하지 않게.
+    retry: (failureCount, err) => !isModeUnavailable(err) && failureCount < 1,
   };
 }
 

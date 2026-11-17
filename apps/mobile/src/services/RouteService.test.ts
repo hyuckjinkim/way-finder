@@ -229,3 +229,84 @@ describe('RouteService — C1(P4) preference·maxExtraMinutes 전달 (와이어 
     expect(firstArg).toBe(routesPath);
   });
 });
+
+// ─── 웹 국내 대중교통: ODsay 직접 호출 (Workers는 고정 IP가 없어 Server 키 불가) ──────────
+describe('RouteService — 웹 국내 대중교통 ODsay 직접 호출', () => {
+  const TRANSIT_KR: RouteRequest = { stops: [SEOUL_A, SEOUL_C], mode: 'transit' };
+  const ODSAY_OK = {
+    result: { path: [{ pathType: 1, info: { totalTime: 5 }, subPath: [
+      { trafficType: 3, distance: 40, sectionTime: 1 },
+      { trafficType: 1, distance: 1100, sectionTime: 2, lane: [{ name: '수도권 1호선' }],
+        startX: 126.972314, startY: 37.555942, endX: 126.977142, endY: 37.565364 },
+      { trafficType: 3, distance: 147, sectionTime: 2 },
+    ] }] },
+  };
+
+  async function load(key: string | undefined) {
+    vi.resetModules();
+    vi.unstubAllEnvs();
+    if (key) vi.stubEnv('EXPO_PUBLIC_ODSAY_KEY', key);
+    vi.stubGlobal('document', {}); // 브라우저(웹) 환경
+    vi.doMock('./apiClient.js', () => ({
+      isDemoMode: false,
+      apiPost: vi.fn().mockResolvedValue({ legs: [], via: 'proxy' }),
+      apiFetch: vi.fn(),
+      ApiError: class extends Error {},
+    }));
+    const { apiPost } = await import('./apiClient.js');
+    const { getRoute } = await import('./RouteService.js');
+    return { apiPost: apiPost as Mock, getRoute };
+  }
+
+  it('키 있음 + 국내 → ODsay 직접 호출, 프록시 미호출', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ODSAY_OK });
+    vi.stubGlobal('fetch', fetchMock);
+    const { apiPost, getRoute } = await load('uri-key');
+    const route = await getRoute(TRANSIT_KR);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('https://api.odsay.com/');
+    expect(fetchMock.mock.calls[0]![1]).toBeUndefined(); // 커스텀 헤더 없는 단순 GET (ODsay CORS)
+    expect(apiPost).not.toHaveBeenCalled();
+    expect(route.legs.some((l) => l.mode === 'transit')).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it('키 없음 → 프록시', async () => {
+    const { apiPost, getRoute } = await load(undefined);
+    await getRoute(TRANSIT_KR);
+    expect(apiPost).toHaveBeenCalledWith(routesPath, TRANSIT_KR);
+    vi.unstubAllGlobals();
+  });
+
+  it('네이티브(document 없음) → 키가 있어도 프록시 (URI 키는 웹 전용)', async () => {
+    const fetchMock = vi.fn();
+    const { apiPost, getRoute } = await load('uri-key');
+    vi.unstubAllGlobals();
+    vi.stubGlobal('fetch', fetchMock);
+    await getRoute(TRANSIT_KR);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(apiPost).toHaveBeenCalledWith(routesPath, TRANSIT_KR);
+    vi.unstubAllGlobals();
+  });
+
+  it('해외 대중교통 → 프록시 (Google)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const { apiPost, getRoute } = await load('uri-key');
+    const req: RouteRequest = { stops: [{ lat: 40.71, lng: -74.0 }, { lat: 40.73, lng: -73.99 }], mode: 'transit' };
+    await getRoute(req);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(apiPost).toHaveBeenCalledWith(routesPath, req);
+    vi.unstubAllGlobals();
+  });
+
+  it('ODsay 인증 실패(200 + error 본문, 예: localhost) → 프록시로 폴백', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ error: [{ code: '500', message: '[ApiKeyAuthFailed]' }] }),
+    }));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { apiPost, getRoute } = await load('uri-key');
+    await getRoute(TRANSIT_KR);
+    expect(apiPost).toHaveBeenCalledWith(routesPath, TRANSIT_KR);
+    vi.unstubAllGlobals();
+  });
+});

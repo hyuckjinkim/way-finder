@@ -284,8 +284,8 @@ describe('routeQueryOptions — retry (501 미지원은 즉시 안내)', () => {
     expect(retry(0, new ApiError(501, 'API error 501'))).toBe(false);
   });
 
-  it('그 외 오류는 3회까지 재시도', () => {
+  it('그 외 오류는 1회만 재시도 (ODsay 공유 쿼터 보호)', () => {
     expect(retry(0, new ApiError(502, 'API error 502'))).toBe(true);
-    expect(retry(3, new Error('network'))).toBe(false);
+    expect(retry(1, new Error('network'))).toBe(false);
   });
 });

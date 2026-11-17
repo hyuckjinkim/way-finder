@@ -13,7 +13,20 @@
 import type { Route, RouteRequest } from '@wayfinder/shared';
 import { routesPath } from '@wayfinder/shared/api';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
+import { routeRegion } from '@wayfinder/shared/region';
+import { koreaTransitRoute } from '@wayfinder/shared/transit';
 import { ApiError, apiPost, isDemoMode } from './apiClient.js';
+
+/**
+ * ODsay URI 키(Service URI 제한) — 웹에서 국내 대중교통을 브라우저가 직접 조회할 때만 쓴다.
+ * 프록시(Cloudflare Workers)는 고정 IP가 없어 ODsay Server 키(IP 제한)가 막히기 때문.
+ * 설계 예외: "키는 프록시에만" 원칙의 의도적 예외 — URI 키는 등록 도메인에서만 동작하는 공개용 키.
+ * 점 표기만 Metro가 정적 인라인한다.
+ */
+const ODSAY_URI_KEY: string | undefined = process.env.EXPO_PUBLIC_ODSAY_KEY || undefined; // 맨 점 표기 필수(apiClient 참고)
+
+/** 브라우저(웹)인지 — 네이티브엔 document가 없다. react-native import 없이 판별(모듈 로드 가벼움). */
+const isBrowser = (): boolean => typeof document !== 'undefined';
 
 /** 프록시 501 MODE_UNAVAILABLE — 이 지역·이동수단의 공급자 키가 없어 지원하지 않음(재시도 무의미). */
 export function isModeUnavailable(err: unknown): boolean {
@@ -34,6 +47,14 @@ export function isModeUnavailable(err: unknown): boolean {
 export async function getRoute(req: RouteRequest): Promise<Route> {
   if (isDemoMode) {
     return mockRouteProvider.getRoute(req);
+  }
+  if (isBrowser() && ODSAY_URI_KEY && req.mode === 'transit' && routeRegion(req.stops) === 'kr') {
+    try {
+      return await koreaTransitRoute(req, ODSAY_URI_KEY);
+    } catch (err) {
+      // 미등록 도메인(예: localhost)이면 URI 키 인증 실패 → 프록시(Server 키) 경로로 폴백.
+      console.warn('[route] ODsay direct failed, falling back to proxy:', err);
+    }
   }
   const data = await apiPost(routesPath, req);
   return data as Route;
