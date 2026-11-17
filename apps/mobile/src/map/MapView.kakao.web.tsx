@@ -16,15 +16,50 @@ import {
 } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Constants from 'expo-constants';
-import type { MapViewProps, MapViewRef, MapMarker } from '@wayfinder/shared';
+import type { MapViewProps, MapViewRef, BBox, Insets, LatLng } from '@wayfinder/shared';
 import {
   loadKakaoSdk,
   zoomToKakaoLevel,
   kakaoLevelToZoom,
   type KakaoMapsNamespace,
   type KakaoMapInstance,
-  type KakaoMarker,
 } from './loadKakaoSdk.js';
+import {
+  fitKey,
+  markerHtml,
+  markerSpec,
+  normalizeInsets,
+  polylineStyle,
+  withUserMarker,
+} from './mapHelpers.js';
+
+/** 지도 준비 전에 들어온 명령형 요청 — 가장 최근 것 하나만 보관해 ready 후 적용. */
+type PendingRequest =
+  | { type: 'fly'; center: LatLng; zoom?: number }
+  | { type: 'fit'; bounds: BBox; padding?: number | Insets };
+
+/** 지도에서 떼어낼 수 있는 오버레이(마커/폴리라인/커스텀 오버레이 공통). */
+interface Removable {
+  setMap(map: KakaoMapInstance | null): void;
+}
+
+function fitMap(
+  kakao: KakaoMapsNamespace,
+  map: KakaoMapInstance,
+  bounds: BBox,
+  padding?: number | Insets,
+) {
+  const b = new kakao.maps.LatLngBounds();
+  b.extend(new kakao.maps.LatLng(bounds.sw.lat, bounds.sw.lng));
+  b.extend(new kakao.maps.LatLng(bounds.ne.lat, bounds.ne.lng));
+  const p = normalizeInsets(padding);
+  map.setBounds(b, p.top, p.right, p.bottom, p.left);
+}
+
+function flyMap(kakao: KakaoMapsNamespace, map: KakaoMapInstance, center: LatLng, zoom?: number) {
+  map.panTo(new kakao.maps.LatLng(center.lat, center.lng));
+  if (typeof zoom === 'number') map.setLevel(zoomToKakaoLevel(zoom));
+}
 
 function readKakaoJsKey(): string {
   const extra = Constants.expoConfig?.extra as { kakaoJsKey?: string } | undefined;
@@ -33,11 +68,13 @@ function readKakaoJsKey(): string {
 
 const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewProps>(
   function MapViewKakaoWeb(props, ref) {
-    const { camera, markers, onPress, onCameraChange } = props;
+    const { camera, markers, polylines, userLocation, fitTo, onPress, onCameraChange } = props;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const kakaoRef = useRef<KakaoMapsNamespace | null>(null);
     const mapRef = useRef<KakaoMapInstance | null>(null);
-    const markerObjsRef = useRef<KakaoMarker[]>([]);
+    const markerObjsRef = useRef<Removable[]>([]);
+    const polylineObjsRef = useRef<Removable[]>([]);
+    const pendingRef = useRef<PendingRequest | null>(null);
     const [status, setStatus] = useState<'loading' | 'ready' | 'no-key' | 'error'>(
       'loading',
     );
@@ -54,20 +91,20 @@ const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewProps>(
         flyTo(center, zoom) {
           const kakao = kakaoRef.current;
           const map = mapRef.current;
-          if (!kakao || !map) return;
-          map.panTo(new kakao.maps.LatLng(center.lat, center.lng));
-          if (typeof zoom === 'number') {
-            map.setLevel(zoomToKakaoLevel(zoom));
+          if (!kakao || !map) {
+            pendingRef.current = { type: 'fly', center, zoom };
+            return;
           }
+          flyMap(kakao, map, center, zoom);
         },
-        fitBounds(bounds) {
+        fitBounds(bounds, padding) {
           const kakao = kakaoRef.current;
           const map = mapRef.current;
-          if (!kakao || !map) return;
-          const b = new kakao.maps.LatLngBounds();
-          b.extend(new kakao.maps.LatLng(bounds.sw.lat, bounds.sw.lng));
-          b.extend(new kakao.maps.LatLng(bounds.ne.lat, bounds.ne.lng));
-          map.setBounds(b);
+          if (!kakao || !map) {
+            pendingRef.current = { type: 'fit', bounds, padding };
+            return;
+          }
+          fitMap(kakao, map, bounds, padding);
         },
       }),
       [],
@@ -103,8 +140,9 @@ const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewProps>(
               zoom: kakaoLevelToZoom(map.getLevel()),
             });
           };
-          kakao.maps.event.addListener(map, 'center_changed', emitCamera);
-          kakao.maps.event.addListener(map, 'zoom_changed', emitCamera);
+          // 'idle' = 이동/줌이 끝난 뒤 한 번. center_changed/zoom_changed는 프로그램 이동 중
+          // 중간 상태(새 center + 옛 level)를 보고해, 부모가 camera를 되돌려 쓰는 경합을 만든다.
+          kakao.maps.event.addListener(map, 'idle', emitCamera);
 
           setStatus('ready');
         })
@@ -119,30 +157,101 @@ const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // 외부 camera prop 변경을 지도에 반영(controlled).
+    // 외부 camera prop 변경을 지도에 반영(controlled). status를 deps에 둬 SDK가 늦게 준비돼도
+    // 그 사이 바뀐 camera가 ready 직후 적용된다. 이미 그 위치면 건너뛴다(진행 중 이동 취소 방지).
     useEffect(() => {
       const kakao = kakaoRef.current;
       const map = mapRef.current;
-      if (!kakao || !map) return;
+      if (status !== 'ready' || !kakao || !map) return;
+      const level = zoomToKakaoLevel(camera.zoom);
+      const c = map.getCenter();
+      const sameCenter =
+        Math.abs(c.getLat() - camera.center.lat) < 1e-7 &&
+        Math.abs(c.getLng() - camera.center.lng) < 1e-7;
+      if (sameCenter && map.getLevel() === level) return;
       map.setCenter(new kakao.maps.LatLng(camera.center.lat, camera.center.lng));
-      map.setLevel(zoomToKakaoLevel(camera.zoom));
-    }, [camera.center.lat, camera.center.lng, camera.zoom]);
+      map.setLevel(level);
+    }, [camera.center.lat, camera.center.lng, camera.zoom, status]);
 
-    // 마커 동기화: 기존 제거 후 재생성(P1 마커 수가 적어 단순 재생성으로 충분).
+    // 마커 동기화: 값(JSON)이 바뀔 때만 기존 제거 후 재생성(부모가 매 렌더 새 배열을 넘겨도 깜빡이지 않음).
+    // place는 기본 핀, 그 외 kind는 CustomOverlay + inline HTML.
+    const markersKey = JSON.stringify(withUserMarker(markers, userLocation));
     useEffect(() => {
       const kakao = kakaoRef.current;
       const map = mapRef.current;
-      if (!kakao || !map) return;
+      if (status !== 'ready' || !kakao || !map) return;
       for (const m of markerObjsRef.current) m.setMap(null);
-      markerObjsRef.current = (markers ?? []).map((mk: MapMarker) => {
-        const marker = new kakao.maps.Marker({
-          position: new kakao.maps.LatLng(mk.coord.lat, mk.coord.lng),
-          title: mk.title,
+      markerObjsRef.current = withUserMarker(markers, userLocation).map((mk) => {
+        const position = new kakao.maps.LatLng(mk.coord.lat, mk.coord.lng);
+        const spec = markerSpec(mk.kind, mk.color);
+        if (!spec) return new kakao.maps.Marker({ position, title: mk.title, map });
+        return new kakao.maps.CustomOverlay({
+          position,
+          content: markerHtml(spec),
+          xAnchor: 0.5,
+          yAnchor: 0.5,
+          zIndex: 3,
           map,
         });
-        return marker;
       });
-    }, [markers, status]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [markersKey, status]);
+
+    // 폴리라인 동기화: 흰 외곽선(zIndex 1, +3px)을 본선(zIndex 2) 아래에 깐다.
+    const polylinesKey = JSON.stringify(polylines ?? []);
+    useEffect(() => {
+      const kakao = kakaoRef.current;
+      const map = mapRef.current;
+      if (status !== 'ready' || !kakao || !map) return;
+      for (const p of polylineObjsRef.current) p.setMap(null);
+      polylineObjsRef.current = (polylines ?? []).flatMap((pl) => {
+        const path = pl.coords.map((c) => new kakao.maps.LatLng(c.lat, c.lng));
+        const st = polylineStyle(pl);
+        const strokeStyle = st.dashed ? 'shortdash' : 'solid';
+        return [
+          new kakao.maps.Polyline({
+            path, map, zIndex: 1, strokeColor: '#ffffff', strokeWeight: st.outlineWidth,
+            strokeOpacity: 0.9, strokeStyle,
+          }),
+          new kakao.maps.Polyline({
+            path, map, zIndex: 2, strokeColor: st.color, strokeWeight: st.width,
+            strokeOpacity: 0.9, strokeStyle,
+          }),
+        ];
+      });
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [polylinesKey, status]);
+
+    // fitTo: ready 후·값(bounds+padding)이 바뀔 때 적용. camera effect보다 뒤에 선언돼 ready 시 camera보다 우선.
+    const fitToKey = fitKey(fitTo);
+    useEffect(() => {
+      const kakao = kakaoRef.current;
+      const map = mapRef.current;
+      if (status !== 'ready' || !kakao || !map || !fitTo) return;
+      fitMap(kakao, map, fitTo.bounds, fitTo.padding);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fitToKey, status]);
+
+    // ready 전에 들어온 명령형 flyTo/fitBounds는 마지막 것만 ready 직후 적용(prop effect들보다 뒤).
+    useEffect(() => {
+      const kakao = kakaoRef.current;
+      const map = mapRef.current;
+      const pending = pendingRef.current;
+      if (status !== 'ready' || !kakao || !map || !pending) return;
+      pendingRef.current = null;
+      if (pending.type === 'fit') fitMap(kakao, map, pending.bounds, pending.padding);
+      else flyMap(kakao, map, pending.center, pending.zoom);
+    }, [status]);
+
+    // 언마운트 정리.
+    useEffect(
+      () => () => {
+        for (const o of [...markerObjsRef.current, ...polylineObjsRef.current]) o.setMap(null);
+        markerObjsRef.current = [];
+        polylineObjsRef.current = [];
+      },
+      [],
+    );
 
     if (status === 'no-key' || status === 'error') {
       return (

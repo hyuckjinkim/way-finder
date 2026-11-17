@@ -13,9 +13,10 @@
  *
  * 웹 번들 격리(B4): 이 파일은 .web이 아니므로 웹 번들에 포함되지 않는다.
  */
-import { forwardRef, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import KakaoMapView from '@react-native-kakao/map';
-import type { MapViewProps, MapViewRef, CameraState } from '@wayfinder/shared';
+import type { MapViewProps, MapViewRef, CameraState, BBox } from '@wayfinder/shared';
+import { approxZoomForBounds, fitKey } from './mapHelpers.js';
 
 /**
  * Kakao `Camera` 형태(v2.2.7 `KakaoMapProps.camera`). 라이브러리가 이 타입을
@@ -40,9 +41,20 @@ function toKakaoCamera(camera: CameraState): KakaoCamera {
   };
 }
 
+/** bbox 중심 + 근사 zoom (v2.2.7엔 setBounds가 없다 — padding은 무시). */
+function cameraForBounds(bounds: BBox): CameraState {
+  return {
+    center: {
+      lat: (bounds.sw.lat + bounds.ne.lat) / 2,
+      lng: (bounds.sw.lng + bounds.ne.lng) / 2,
+    },
+    zoom: approxZoomForBounds(bounds),
+  };
+}
+
 const MapViewKakaoNative = forwardRef<MapViewRef, MapViewProps>(
   function MapViewKakaoNative(props, ref) {
-    const { camera } = props;
+    const { camera, fitTo } = props;
     // controlled camera를 로컬 상태로 보관 — 명령형 flyTo/fitBounds가 이를 갱신.
     const [activeCamera, setActiveCamera] = useState<CameraState>(camera);
 
@@ -56,31 +68,28 @@ const MapViewKakaoNative = forwardRef<MapViewRef, MapViewProps>(
           }));
         },
         fitBounds(bounds) {
-          // v2.2.7엔 setBounds 명령형 API가 없어 bbox 중심으로 이동(근사).
-          setActiveCamera({
-            center: {
-              lat: (bounds.sw.lat + bounds.ne.lat) / 2,
-              lng: (bounds.sw.lng + bounds.ne.lng) / 2,
-            },
-            zoom: 11,
-          });
+          setActiveCamera(cameraForBounds(bounds));
         },
       }),
       [],
     );
 
-    // 외부 camera prop 또는 명령형 갱신 중 최신값을 사용.
-    const effectiveCamera =
-      camera.center.lat === activeCamera.center.lat &&
-      camera.center.lng === activeCamera.center.lng &&
-      camera.zoom === activeCamera.zoom
-        ? camera
-        : activeCamera;
+    // 외부 camera prop이 값으로 바뀌면 로컬 상태를 덮어쓴다(이전엔 오래된 명령형 상태가 이겨
+    // camera prop 변경이 지도에 반영되지 않았다). fitTo는 뒤에 선언돼 같은 커밋에선 camera보다 우선.
+    useEffect(() => {
+      setActiveCamera(camera);
+    }, [camera.center.lat, camera.center.lng, camera.zoom]);
+
+    const fitToKey = fitKey(fitTo);
+    useEffect(() => {
+      if (fitTo) setActiveCamera(cameraForBounds(fitTo.bounds));
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fitToKey]);
 
     return (
       <KakaoMapView
         style={{ flex: 1 }}
-        camera={toKakaoCamera(effectiveCamera)}
+        camera={toKakaoCamera(activeCamera)}
       />
     );
   },

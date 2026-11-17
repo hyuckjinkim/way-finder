@@ -28,8 +28,20 @@ export interface KakaoMapsNamespace {
       path: KakaoLatLng[];
       strokeWeight?: number;
       strokeColor?: string;
+      strokeOpacity?: number;
+      strokeStyle?: 'solid' | 'shortdash' | 'shortdot' | 'dash' | 'dot';
+      zIndex?: number;
       map?: KakaoMapInstance;
     }) => KakaoPolyline;
+    CustomOverlay: new (options: {
+      position: KakaoLatLng;
+      /** HTML 문자열 또는 엘리먼트. */
+      content: string | HTMLElement;
+      xAnchor?: number;
+      yAnchor?: number;
+      zIndex?: number;
+      map?: KakaoMapInstance;
+    }) => KakaoOverlay;
     event: {
       addListener(
         target: KakaoMapInstance,
@@ -65,11 +77,25 @@ export interface KakaoMapInstance {
   getCenter(): KakaoLatLng;
   getLevel(): number;
   panTo(latlng: KakaoLatLng): void;
-  setBounds(bounds: KakaoLatLngBounds): void;
+  /**
+   * 여백(px)은 top/right/bottom/left 순서의 위치 인자 (Insets 한 개 객체가 아님).
+   * 생략하면 0.
+   */
+  setBounds(
+    bounds: KakaoLatLngBounds,
+    paddingTop?: number,
+    paddingRight?: number,
+    paddingBottom?: number,
+    paddingLeft?: number,
+  ): void;
   relayout(): void;
 }
 
 export interface KakaoMarker {
+  setMap(map: KakaoMapInstance | null): void;
+}
+
+export interface KakaoOverlay {
   setMap(map: KakaoMapInstance | null): void;
 }
 
