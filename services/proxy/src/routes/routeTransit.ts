@@ -20,7 +20,7 @@ import type { Route, RouteRequest, LatLng } from '@wayfinder/shared';
 import { routeRegion } from '@wayfinder/shared/region';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import type { Env } from '../config.js';
-import { modeUnavailableBody, routeGate } from '../config.js';
+import { modeUnavailableBody, routeGate, UPSTREAM_TIMEOUT_MS } from '../config.js';
 import { validateRouteBody, runProviderOrError } from './routeValidate.js';
 import {
   normalizeGoogleTransit,
@@ -49,6 +49,7 @@ function googleTransitBody(req: RouteRequest): unknown {
 /** 글로벌 대중교통 — Google Routes(TRANSIT) 탐색 → 정규화 → 합성. */
 async function fetchGlobalTransit(req: RouteRequest, env: Env): Promise<Route> {
   const res = await fetch(GOOGLE_ROUTES_URL, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     method: 'POST',
     headers: {
       'X-Goog-Api-Key': env.GOOGLE_ROUTES_KEY,

@@ -17,6 +17,7 @@ import {
   placeGooglePath,
   blogsPath,
   routesPath,
+  capabilitiesPath,
 } from '@wayfinder/shared/api';
 import {
   MIN_EXTRA_MINUTES,
@@ -55,6 +56,7 @@ describe('contract — shared/api 경로가 전부 프록시에 등록됨 (subse
     { method: 'GET', path: placeDetailPath(SENTINEL) },
     { method: 'GET', path: placeGooglePath(SENTINEL) },
     { method: 'POST', path: routesPath },
+    { method: 'GET', path: capabilitiesPath },
   ];
 
   for (const { method, path } of expected) {

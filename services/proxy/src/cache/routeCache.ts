@@ -9,7 +9,7 @@
  * 부동소수 표현 차이로 인한 키 분산을 막고, 같은 요청이 같은 키로 수렴하게 한다.
  */
 import type { LatLng, RouteRequest, Route } from '@wayfinder/shared';
-import type { KVStore } from './kv.js';
+import type { KVStore, Defer } from './kv.js';
 
 /** 대중교통 경로 캐시 TTL(초). ODsay 데이터 변동성·쿼터 균형 — 6h. */
 export const ROUTE_CACHE_TTL = 6 * 60 * 60;
@@ -57,10 +57,14 @@ export async function putCachedRoute(
   kv: KVStore,
   req: RouteRequest,
   route: Route,
+  defer?: Defer,
 ): Promise<void> {
-  await kv.put(routeCacheKey(req), JSON.stringify(route), {
-    expirationTtl: ROUTE_CACHE_TTL,
-  });
+  // put 실패(KV 쓰기 쿼터 등)가 응답을 깨뜨리면 안 된다 — 캐시는 best-effort.
+  const write = Promise.resolve()
+    .then(() => kv.put(routeCacheKey(req), JSON.stringify(route), { expirationTtl: ROUTE_CACHE_TTL }))
+    .catch((err) => console.error('[cache] route put failed:', err));
+  if (defer) defer(write);
+  else await write;
 }
 
 /**
@@ -71,10 +75,11 @@ export async function getOrFetchRoute(
   kv: KVStore,
   req: RouteRequest,
   fetcher: () => Promise<Route>,
+  defer?: Defer,
 ): Promise<Route> {
   const cached = await getCachedRoute(kv, req);
   if (cached !== null) return cached;
   const route = await fetcher();
-  await putCachedRoute(kv, req, route);
+  await putCachedRoute(kv, req, route, defer);
   return route;
 }

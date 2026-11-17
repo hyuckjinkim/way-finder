@@ -6,6 +6,7 @@
  *   GET /v1/places/:id                    장소 상세 (기본정보 + 블로그, 구글 미포함)
  *   GET /v1/places/:id/google             구글 평점·리뷰 (lazy — 구글 탭 활성화 시)
  *   GET /v1/blogs?q=&region=kr            네이버+카카오 블로그 병합
+ *   GET /v1/capabilities                  지원 이동수단 (키 보유 기준)
  *   POST /v1/routes                       경로 탐색 (모드 디스패치 — F1 C2)
  *
  * 경로 등록은 @wayfinder/shared/api 상수를 단일 진실 소스로 사용한다 (P1 드리프트 봉합).
@@ -17,7 +18,7 @@
  */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { placesSearchPath, blogsPath, routesPath } from '@wayfinder/shared/api';
+import { placesSearchPath, blogsPath, routesPath, capabilitiesPath } from '@wayfinder/shared/api';
 import type { Env } from './config.js';
 import { rateLimitMiddleware } from './middleware/ratelimit.js';
 import { handlePlacesSearch } from './routes/places-search.js';
@@ -25,6 +26,7 @@ import { handlePlaceDetail } from './routes/place-detail.js';
 import { handlePlaceGoogle } from './routes/place-google.js';
 import { handleBlogs } from './routes/blogs.js';
 import { dispatchRoutes } from './routes/modeHandlers.js';
+import { handleCapabilities } from './routes/capabilities.js';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -43,9 +45,16 @@ app.get(placesSearchPath, handlePlacesSearch);
 app.get('/v1/places/:id/google', handlePlaceGoogle); // ≡ placeGooglePath(':id')
 app.get('/v1/places/:id', handlePlaceDetail); // ≡ placeDetailPath(':id')
 app.get(blogsPath, handleBlogs);
+app.get(capabilitiesPath, handleCapabilities);
 
 // POST /v1/routes — 모드 디스패치 (F1 C2). A/B가 핸들러 stub을 덮어쓴다.
 app.post(routesPath, dispatchRoutes);
+
+// 미처리 예외 → JSON 500 (Hono 기본은 text/plain이라 앱이 파싱 실패)
+app.onError((err, c) => {
+  console.error('[proxy] unhandled error:', err);
+  return c.json({ error: 'Internal Server Error' }, 500);
+});
 
 // 404 핸들러
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));

@@ -32,6 +32,8 @@ function extractCategory(categoryName: string): string {
 
 /** 카카오 Local 문서 한 건 → Place */
 export function normalizeKakaoPlace(doc: KakaoLocalDocument): Place {
+  // distance는 좌표(x,y)를 보낸 검색에만 오고, 아니면 ''.
+  const distanceM = doc.distance ? Number(doc.distance) : NaN;
   return {
     id: `kakao:${doc.id}`,
     name: doc.place_name,
@@ -41,6 +43,8 @@ export function normalizeKakaoPlace(doc: KakaoLocalDocument): Place {
     },
     category: extractCategory(doc.category_name),
     address: doc.road_address_name || doc.address_name,
+    ...(Number.isFinite(distanceM) && { distanceM }),
+    ...(doc.category_group_name && { categoryGroup: doc.category_group_name }),
   };
 }
 
@@ -51,6 +55,7 @@ export function normalizeKakaoPlace(doc: KakaoLocalDocument): Place {
 export function normalizeKakaoPlaceDetail(doc: KakaoLocalDocument): PlaceDetail {
   return {
     ...normalizeKakaoPlace(doc),
+    distanceM: undefined, // 상세 조회용 검색 기준점은 사용자 위치가 아니라 힌트 좌표 — 거리 무의미
     phone: doc.phone || undefined,
     rating: undefined,
     reviews: [],

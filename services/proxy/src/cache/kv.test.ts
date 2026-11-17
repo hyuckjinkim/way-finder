@@ -64,10 +64,27 @@ describe('cacheGet / cachePut', () => {
     expect(entry?.ttl).toBe(TTL.GOOGLE); // cap
   });
 
-  it('cacheKey 형식은 "{prefix}:{key}"', async () => {
+  it('cacheKey 형식은 "{prefix}:{정규화된 key}" — trim·공백 축약·소문자', async () => {
     const kv = makeKV();
-    await cachePut(kv, 'blog', 'myKey', 42);
-    expect(kv._store.has('blog:myKey')).toBe(true);
+    await cachePut(kv, 'blog', '  My   Key ', 42);
+    expect(kv._store.has('blog:my key')).toBe(true);
+    expect(await cacheGet(kv, 'blog', 'my key')).toBe(42);
+  });
+
+  it('put이 throw해도(KV 쓰기 쿼터 초과) cachePut은 reject하지 않는다', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const kv: KVStore = { get: async () => null, put: async () => { throw new Error('KV put() limit exceeded'); } };
+    await expect(cachePut(kv, 'place', 'k', { a: 1 })).resolves.toBeUndefined();
+    err.mockRestore();
+  });
+
+  it('defer가 주어지면 put을 응답 경로에서 await하지 않고 defer에 넘긴다', async () => {
+    const kv = makeKV();
+    const deferred: Promise<unknown>[] = [];
+    await cachePut(kv, 'place', 'k', 1, undefined, (p) => deferred.push(p));
+    expect(deferred).toHaveLength(1);
+    await Promise.all(deferred);
+    expect(kv._store.has('place:k')).toBe(true);
   });
 });
 
@@ -89,6 +106,12 @@ describe('cacheGetOrSet', () => {
     const result = await cacheGetOrSet(kv, 'place', 'k', fetcher);
     expect(fetcher).not.toHaveBeenCalled();
     expect(result).toEqual({ name: 'cached' });
+  });
+
+  it('null(미존재)은 캐시하지 않는다 — 404 고착 방지', async () => {
+    const kv = makeKV();
+    await cacheGetOrSet(kv, 'place', 'k', vi.fn().mockResolvedValue(null));
+    expect(kv._store.has('place:k')).toBe(false);
   });
 
   it('빈 배열(공급자 실패 폴백)은 캐시하지 않는다 — 장애가 TTL 동안 고착되지 않게', async () => {

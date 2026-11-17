@@ -17,7 +17,7 @@ import type {
   RouteRequest,
 } from '@wayfinder/shared';
 import type { ValhallaProvider } from './routeDirect.js';
-import type { Env } from '../config.js';
+import { VALHALLA_TIMEOUT_MS, type Env } from '../config.js';
 import { normalizeValhalla, type ValhallaRouteRaw } from '../normalize/valhalla.js';
 import { applyExtraMinutesFilter } from './extraMinutesFilter.js';
 
@@ -64,6 +64,7 @@ async function postValhalla(env: Env, body: Record<string, unknown>): Promise<Va
   let res: Response;
   try {
     res = await fetch(url, {
+      signal: AbortSignal.timeout(VALHALLA_TIMEOUT_MS),
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

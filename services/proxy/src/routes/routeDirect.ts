@@ -20,7 +20,7 @@ import type {
 import { routeRegion } from '@wayfinder/shared/region';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import type { Env } from '../config.js';
-import { isValhallaCustomRoute, modeUnavailableBody, routeGate } from '../config.js';
+import { isValhallaCustomRoute, modeUnavailableBody, routeGate, UPSTREAM_TIMEOUT_MS } from '../config.js';
 import { validateRouteBody, runProviderOrError } from './routeValidate.js';
 import { fetchValhallaBike, resolveValhallaCustomRoute } from './valhallaProvider.js';
 import {
@@ -120,6 +120,7 @@ async function fetchKorea(
 ): Promise<Route> {
   if (mode === 'car') {
     const res = await fetch(KAKAO_MOBILITY_URL, {
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       method: 'POST',
       headers: {
         Authorization: `KakaoAK ${env.KAKAO_MOBILITY_KEY}`,
@@ -135,6 +136,7 @@ async function fetchKorea(
   // walk → TMAP
   const url = TMAP_PEDESTRIAN_URL;
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     method: 'POST',
     headers: { appKey: env.TMAP_APP_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(tmapBody(req)),
@@ -151,6 +153,7 @@ async function fetchGlobal(
   env: Env,
 ): Promise<Route> {
   const res = await fetch(GOOGLE_ROUTES_URL, {
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     method: 'POST',
     headers: {
       'X-Goog-Api-Key': env.GOOGLE_ROUTES_KEY,

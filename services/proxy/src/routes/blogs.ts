@@ -7,7 +7,7 @@
  */
 import type { Context } from 'hono';
 import type { Env } from '../config.js';
-import { isDemoMode } from '../config.js';
+import { isDemoMode, UPSTREAM_TIMEOUT_MS } from '../config.js';
 import { SEOUL_CAFE } from '@wayfinder/shared/mocks';
 import { normalizeNaverBlogResponse, type NaverBlogResponse } from '../normalize/naverBlog.js';
 import { normalizeKakaoBlogResponse, type KakaoBlogResponse } from '../normalize/kakaoBlog.js';
@@ -30,6 +30,8 @@ export async function fetchNaverBlogs(q: string, env: Env): Promise<BlogPost[]> 
   url.searchParams.set('format', 'json');
 
   const res = await fetch(url.toString(), {
+
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     headers: {
       'X-NCP-APIGW-API-KEY-ID': env.NAVER_CLIENT_ID,
       'X-NCP-APIGW-API-KEY': env.NAVER_CLIENT_SECRET,
@@ -47,6 +49,8 @@ async function fetchKakao(q: string, key: string): Promise<BlogPost[]> {
   url.searchParams.set('sort', 'accuracy');
 
   const res = await fetch(url.toString(), {
+
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     headers: { Authorization: `KakaoAK ${key}` },
   });
   if (!res.ok) throw new Error(`Kakao blog search failed: ${res.status}`);

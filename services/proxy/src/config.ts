@@ -27,6 +27,8 @@ export interface Env {
   // 미설정 시 커스텀 경로는 데모/TMAP 폴백 (키 0개 동작 유지).
   VALHALLA_URL: string;
   CACHE: KVNamespace;
+  // Workers Rate Limiting 바인딩 (wrangler.toml [[ratelimits]]). 미설정 시 레이트리밋 통과.
+  RATE_LIMITER?: RateLimit;
 }
 
 /**
@@ -125,3 +127,8 @@ export const TTL = {
   PLACE: 24 * 60 * 60,        // 24h
   GOOGLE: 30 * 24 * 60 * 60,  // 30일 (Google Places 약관 최대치)
 } as const;
+
+/** 업스트림 fetch 타임아웃 (ms) — 느린 공급자가 Worker 요청을 붙잡지 않게. */
+export const UPSTREAM_TIMEOUT_MS = 8000;
+/** Valhalla(자체 호스팅 컨테이너) 타임아웃 (ms). */
+export const VALHALLA_TIMEOUT_MS = 5000;
