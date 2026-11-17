@@ -37,3 +37,11 @@ export const blogsPath = '/v1/blogs';
 
 /** 경로 탐색 (§8). `POST` — body `RouteRequest { stops, mode }`. */
 export const routesPath = '/v1/routes';
+
+/** 지원 이동수단 — 프록시가 보유 키로 판정. 앱은 미지원 모드 탭을 숨긴다. */
+export const capabilitiesPath = '/v1/capabilities';
+
+/** `GET capabilitiesPath` 응답. 지역별 실제 경로를 낼 수 있는 모드 목록. */
+export interface Capabilities {
+  modes: { kr: string[]; global: string[] };
+}
