@@ -139,6 +139,8 @@ export interface TransitMeta {
   lineName: string;
   lineType: 'subway' | 'bus' | 'train' | 'express' | 'air';
   headsign?: string;
+  /** 노선 공식색 (#RRGGBB) — 알 수 없으면 미존재. */
+  lineColor?: string;
 }
 
 /**
@@ -190,4 +192,8 @@ export interface Route {
    * 기존 P2 경로(fastest)는 미존재(하위호환). C3 요약·D2 게이트의 단일 입력.
    */
   customMeta?: RouteCustomMeta;
+  /** 대중교통 요금(원, 선택). */
+  fare?: number;
+  /** 대안 경로 (첫 경로=자신 제외). 대중교통만 채운다. */
+  alternatives?: Route[];
 }

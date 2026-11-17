@@ -11,8 +11,20 @@
 export const placesSearchPath = '/v1/places/search';
 
 /** 장소 상세 — 기본정보 + 블로그 (구글 평점·리뷰 미포함, lazy). */
-export function placeDetailPath(id: string): string {
-  return `/v1/places/${encodeURIComponent(id)}`;
+export function placeDetailPath(id: string, hint?: PlaceHint): string {
+  const base = `/v1/places/${encodeURIComponent(id)}`;
+  if (!hint) return base;
+  const qs = new URLSearchParams({ name: hint.name, lat: String(hint.coord.lat), lng: String(hint.coord.lng) });
+  return `${base}?${qs}`;
+}
+
+/**
+ * 카카오는 id 단건 조회 API가 없다 → 상세 요청에 검색 결과의 이름·좌표를 실어 보내고
+ * 프록시가 그 근처를 키워드 검색해 id로 매칭한다.
+ */
+export interface PlaceHint {
+  name: string;
+  coord: { lat: number; lng: number };
 }
 
 /** 구글 평점·리뷰 (구글 탭 활성화 시 lazy load — §11 과금 방어선). */

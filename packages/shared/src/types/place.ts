@@ -12,6 +12,10 @@ export interface Place {
   coord: LatLng;
   category: string;
   address: string;
+  /** 검색 기준 좌표로부터 거리(m) — 좌표를 보낸 검색에만. */
+  distanceM?: number;
+  /** 업종 대분류(카페·음식점·지하철역 …). */
+  categoryGroup?: string;
 }
 
 /** 구글 평점 요약. P1에서 source는 항상 'google' (§7). */

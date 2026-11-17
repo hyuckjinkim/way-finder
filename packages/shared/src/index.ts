@@ -47,6 +47,7 @@ export {
 export type {
   MapViewProps,
   MapViewRef,
+  Insets,
   MapMarker,
   MapPolyline,
 } from './map/MapView.js';
