@@ -10,6 +10,12 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+// 딥링크·새로고침으로 /search 등에 바로 들어와도 홈 지도가 아래에 깔리도록.
+export const unstable_settings = { initialRouteName: 'index' };
+
+// 검색·경로 입력은 지도를 가리지 않는 패널(OverlayPanel)로 — 아래 홈 지도가 계속 보인다.
+const OVERLAY = { presentation: 'transparentModal', headerShown: false, animation: 'fade' } as const;
+
 // 데모/실 모드 공통 쿼리 클라이언트 (D4 훅 usePlaceDetailQuery 등이 사용).
 const queryClient = new QueryClient();
 
@@ -20,7 +26,7 @@ export default function RootLayout() {
         <SafeAreaProvider>
           <Stack>
           <Stack.Screen name="index" options={{ title: 'Wayfinder', headerShown: false }} />
-          <Stack.Screen name="search" options={{ title: '검색', headerShown: true }} />
+          <Stack.Screen name="search" options={{ title: '검색', ...OVERLAY }} />
           <Stack.Screen
             name="place/[id]"
             options={{ title: '장소 상세', presentation: 'modal' }}
@@ -31,7 +37,7 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="route/input"
-            options={{ title: '경로 입력', headerShown: true }}
+            options={{ title: '경로 입력', ...OVERLAY }}
           />
           <Stack.Screen
             name="route/result"

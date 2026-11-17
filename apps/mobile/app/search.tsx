@@ -9,6 +9,7 @@ import React, { useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import type { CameraState, Place } from '@wayfinder/shared';
 import { SearchScreen } from '../src/screens/SearchScreen';
+import { OverlayPanel } from '../src/components/OverlayPanel';
 import { useAppStore } from '../src/state/store';
 
 export default function SearchRoute() {
@@ -27,5 +28,9 @@ export default function SearchRoute() {
 
   const onCancel = useCallback(() => router.back(), [router]);
 
-  return <SearchScreen onSelectPlace={onSelectPlace} onCancel={onCancel} />;
+  return (
+    <OverlayPanel>
+      <SearchScreen onSelectPlace={onSelectPlace} onCancel={onCancel} />
+    </OverlayPanel>
+  );
 }

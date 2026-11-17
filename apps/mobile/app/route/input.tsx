@@ -13,6 +13,7 @@ import type { RoutePreference, RouteRequest } from '@wayfinder/shared';
 import { RouteInputScreen } from '../../src/screens/RouteInputScreen';
 import { useRouteStore } from '../../src/state/routeStore';
 import { RouteOptionsBar } from '../../src/route/RouteOptionsBar';
+import { OverlayPanel } from '../../src/components/OverlayPanel';
 
 export default function RouteInputRoute() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function RouteInputRoute() {
   );
 
   return (
-    <>
+    <OverlayPanel>
       {/* 경로 옵션 슬롯 — B3 구현 전 stub(null 렌더). 배선 계약 선행 정착. */}
       <RouteOptionsBar
         preference={preference}
@@ -55,6 +56,6 @@ export default function RouteInputRoute() {
         onMaxExtraMinutesChange={onMaxExtraMinutesChange}
       />
       <RouteInputScreen onSubmit={onSubmit} onCancel={onCancel} />
-    </>
+    </OverlayPanel>
   );
 }
