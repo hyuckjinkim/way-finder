@@ -15,7 +15,7 @@ import {
 } from '@tanstack/react-query';
 import { useRef, useEffect, useState } from 'react';
 import type { LatLng, Route, RoutePreference, TravelMode } from '@wayfinder/shared';
-import { getRoute } from '../services/RouteService.js';
+import { getRoute, isModeUnavailable } from '../services/RouteService.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
 
 // ─── 캐시 키 팩토리 ────────────────────────────────────────────────────────────
@@ -54,6 +54,8 @@ export function routeQueryOptions(
     queryFn: () => getRoute({ stops, mode, preference, maxExtraMinutes }),
     enabled: stops.length >= 2,
     staleTime: 60_000, // 1분
+    // 미지원(501)은 재시도해도 같은 결과 — 즉시 안내. 그 외는 TanStack 기본(3회).
+    retry: (failureCount, err) => !isModeUnavailable(err) && failureCount < 3,
   };
 }
 

@@ -13,6 +13,7 @@ import type { Route, MapViewRef, RoutePreference } from '@wayfinder/shared';
 import MapView from '../map/MapView';
 import { routeToPolylines, boundsForRoute } from '../route/routeToPolylines.js';
 import { routeSummary } from '../route/routeSummary.js';
+import { isModeUnavailable } from '../services/RouteService.js';
 
 /** 선호 프로필 → 한국어 라벨 (C3 로컬 맵 — B1 routePreference.ts import 금지). */
 const PREFERENCE_LABEL: Record<RoutePreference, string> = {
@@ -30,6 +31,15 @@ export interface RouteResultScreenProps {
   onBack: () => void;
   /** 안내 시작 콜백(P3). 지정 + route 있을 때만 "안내 시작" 버튼 렌더. */
   onStartNav?: () => void;
+  /** 경로 탐색 오류. 있으면 "탐색 중" 대신 안내 문구 (이전엔 오류 시 로딩 문구가 영구 표시됨). */
+  error?: unknown;
+}
+
+/** 오류 → 사용자 안내 문구. 501(프록시 MODE_UNAVAILABLE)은 이동수단 미지원. */
+export function routeErrorMessage(error: unknown): string {
+  return isModeUnavailable(error)
+    ? '이 지역에서는 이 이동수단 길찾기를 지원하지 않습니다. 다른 이동수단을 선택해 주세요.'
+    : '경로를 찾지 못했습니다. 잠시 후 다시 시도해 주세요.';
 }
 
 /** 초(seconds) → "N분" 또는 "N시간 M분" 문자열. */
@@ -51,6 +61,7 @@ export function RouteResultScreen({
   route,
   onBack,
   onStartNav,
+  error,
 }: RouteResultScreenProps): React.ReactElement {
   const mapRef = useRef<MapViewRef>(null);
 
@@ -157,7 +168,9 @@ export function RouteResultScreen({
             )}
           </ScrollView>
         ) : (
-          <Text style={styles.emptyText}>경로를 탐색 중입니다…</Text>
+          <Text style={styles.emptyText} accessibilityRole={error ? 'alert' : undefined}>
+            {error ? routeErrorMessage(error) : '경로를 탐색 중입니다…'}
+          </Text>
         )}
       </View>
     </View>

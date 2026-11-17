@@ -27,6 +27,16 @@ const API_BASE_URL: string | undefined =
  */
 export const isDemoMode: boolean = !API_BASE_URL;
 
+/** HTTP 오류 — 호출자가 상태 코드로 분기할 수 있게 status를 보존한다 (예: 501 = 이동수단 미지원). */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 /**
  * 프록시 API를 호출하고 JSON을 반환한다.
  * 실 모드에서만 사용해야 한다(데모 모드에서는 mock provider를 사용할 것).
@@ -44,7 +54,7 @@ export async function apiFetch(path: string): Promise<unknown> {
   const url = `${API_BASE_URL}${path}`;
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${res.statusText} — ${url}`);
+    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText} — ${url}`);
   }
   return res.json() as Promise<unknown>;
 }
@@ -71,7 +81,7 @@ export async function apiPost(path: string, body: unknown): Promise<unknown> {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`API error ${res.status}: ${res.statusText} — ${url}`);
+    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText} — ${url}`);
   }
   return res.json() as Promise<unknown>;
 }

@@ -22,6 +22,7 @@ import {
   BIKE_SIMPLE,
 } from '@wayfinder/shared/mocks';
 import { RouteResultScreen } from './RouteResultScreen.js';
+import { ApiError } from '../services/apiClient.js';
 
 const render = (el: React.ReactElement): string => renderToStaticMarkup(el);
 
@@ -189,5 +190,23 @@ describe('RouteResultScreen — C3(P4) customMeta 프로필·예산 표시', () 
     const html = render(<RouteResultScreen route={route} onBack={() => {}} />);
     // WALK_SIMPLE: 900초 = 15분
     expect(html).toContain('15분');
+  });
+});
+
+describe('RouteResultScreen — 오류 상태 (회귀: 오류 시 "탐색 중" 영구 표시)', () => {
+  it('501 MODE_UNAVAILABLE → 이동수단 미지원 안내, 로딩 문구 없음', () => {
+    const html = render(
+      <RouteResultScreen route={null} error={new ApiError(501, 'API error 501')} onBack={() => {}} />,
+    );
+    expect(html).toContain('이동수단 길찾기를 지원하지 않습니다');
+    expect(html).not.toContain('탐색 중');
+  });
+
+  it('그 외 오류(502 등) → 일반 실패 안내', () => {
+    const html = render(
+      <RouteResultScreen route={null} error={new ApiError(502, 'API error 502')} onBack={() => {}} />,
+    );
+    expect(html).toContain('경로를 찾지 못했습니다');
+    expect(html).not.toContain('지원하지 않습니다');
   });
 });

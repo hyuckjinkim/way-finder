@@ -17,6 +17,7 @@ import {
   scheduleDebounce,
 } from './routeQueries.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
+import { ApiError } from '../services/apiClient.js';
 import type { LatLng, RoutePreference, TravelMode } from '@wayfinder/shared';
 
 const SEOUL_A: LatLng = { lat: 37.5563, lng: 126.9723 };
@@ -273,5 +274,18 @@ describe('scheduleDebounce — C2(P4) 슬라이더 N분 디바운스', () => {
 
     vi.advanceTimersByTime(1);
     expect(commit).toHaveBeenCalledExactlyOnceWith(20);
+  });
+});
+
+describe('routeQueryOptions — retry (501 미지원은 즉시 안내)', () => {
+  const retry = routeQueryOptions([SEOUL_A, SEOUL_C], 'car').retry as (n: number, e: Error) => boolean;
+
+  it('501 MODE_UNAVAILABLE은 재시도하지 않는다', () => {
+    expect(retry(0, new ApiError(501, 'API error 501'))).toBe(false);
+  });
+
+  it('그 외 오류는 3회까지 재시도', () => {
+    expect(retry(0, new ApiError(502, 'API error 502'))).toBe(true);
+    expect(retry(3, new Error('network'))).toBe(false);
   });
 });

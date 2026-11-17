@@ -13,7 +13,12 @@
 import type { Route, RouteRequest } from '@wayfinder/shared';
 import { routesPath } from '@wayfinder/shared/api';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
-import { apiPost, isDemoMode } from './apiClient.js';
+import { ApiError, apiPost, isDemoMode } from './apiClient.js';
+
+/** 프록시 501 MODE_UNAVAILABLE — 이 지역·이동수단의 공급자 키가 없어 지원하지 않음(재시도 무의미). */
+export function isModeUnavailable(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 501;
+}
 
 /**
  * 경로를 탐색하고 단일 `Route`를 반환한다.
