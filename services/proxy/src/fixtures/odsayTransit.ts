@@ -5,7 +5,7 @@
  * 시간은 ODsay 규약대로 **분 단위** (정규화기가 ×60으로 초 변환).
  * X=경도, Y=위도.
  */
-import type { OdsayTransitResponse } from '../normalize/odsayTransit.js';
+import type { OdsayTransitResponse } from '@wayfinder/shared/transit';
 
 /** 서울 시내: 지하철 → 환승도보 → 버스 (단일 구간 path[0]). */
 export const ODSAY_CITY_RAW: OdsayTransitResponse = {

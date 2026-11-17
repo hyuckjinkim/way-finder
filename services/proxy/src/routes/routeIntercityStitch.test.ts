@@ -6,14 +6,14 @@ import { describe, it, expect } from 'vitest';
 import { TRANSFER_BUFFER_SEC } from '@wayfinder/shared';
 import type { RouteLeg } from '@wayfinder/shared';
 import { ROUTE_FIXTURE_COORDS, INTERCITY_STITCH } from '@wayfinder/shared/mocks';
-import { normalizeOdsayTransit } from '../normalize/odsayTransit.js';
+import { normalizeOdsayTransit } from '@wayfinder/shared/transit';
 import { ODSAY_INTERCITY_RAW } from '../fixtures/odsayTransit.js';
 import {
   isIntercity,
   promoteIntercityLeg,
   stitchIntercity,
   INTERCITY_LAT_THRESHOLD,
-} from './routeIntercityStitch.js';
+} from '@wayfinder/shared/transit';
 
 const {
   SEOUL_A,

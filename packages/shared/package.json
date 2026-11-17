@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./api": "./src/api/paths.ts",
     "./mocks": "./src/mocks/index.ts",
-    "./region": "./src/region/koreaBbox.ts"
+    "./region": "./src/region/koreaBbox.ts",
+    "./transit": "./src/transit/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

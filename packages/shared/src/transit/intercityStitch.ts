@@ -16,8 +16,8 @@
  * 위도 차(>1.5°)로 도시간을 근사한다(mockRouteProvider와 동일). 실 형식 검증은
  * §5 스모크/사용자 액션으로 연기 — open-questions.md 로깅.
  */
-import type { LatLng, RouteLeg, Route, TransitMeta } from '@wayfinder/shared';
-import { buildTransitRoute } from './routeTransitChain.js';
+import type { LatLng, RouteLeg, Route, TransitMeta } from '../index.js';
+import { buildTransitRoute } from './transitChain.js';
 
 /** 도시간 판정 위도 차 임계(도). mockRouteProvider 휴리스틱과 동기. */
 export const INTERCITY_LAT_THRESHOLD = 1.5;

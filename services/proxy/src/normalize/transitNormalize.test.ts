@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 
-import { normalizeOdsayTransit } from './odsayTransit.js';
+import { normalizeOdsayTransit } from '@wayfinder/shared/transit';
 import { normalizeGoogleTransit } from './googleTransit.js';
 import {
   ODSAY_CITY_RAW,

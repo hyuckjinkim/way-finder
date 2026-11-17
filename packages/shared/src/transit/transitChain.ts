@@ -10,8 +10,8 @@
  *  INTERCITY_STITCH: 3 leg → 버퍼 2회 = 600s, total 11400s. 두 픽스처 모두 성립.)
  * 환승 버퍼 상수는 shared `TRANSFER_BUFFER_SEC`를 import — 자체 상수 정의 금지(F1.2 동결).
  */
-import { TRANSFER_BUFFER_SEC } from '@wayfinder/shared';
-import type { Route, RouteLeg } from '@wayfinder/shared';
+import { TRANSFER_BUFFER_SEC } from '../index.js';
+import type { Route, RouteLeg } from '../index.js';
 
 /**
  * 구간별 RouteLeg 배열들을 순서대로 이어붙여 Route를 합성한다.

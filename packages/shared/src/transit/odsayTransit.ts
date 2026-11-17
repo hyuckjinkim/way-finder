@@ -15,8 +15,8 @@
  * 도시간(train/express/air) lineType은 여기서 생성하지 않는다 — 시내 정규화는
  * subway/bus/walk만 생성. 도시간 분류는 B3(routeIntercityStitch) 책임 (§부록 부속).
  */
-import type { LatLng } from '@wayfinder/shared';
-import type { RouteLeg, TransitMeta } from '@wayfinder/shared';
+import type { LatLng } from '../index.js';
+import type { RouteLeg, TransitMeta } from '../index.js';
 
 /** ODsay subPath 내 lane(노선) 한 건. */
 export interface OdsayLane {

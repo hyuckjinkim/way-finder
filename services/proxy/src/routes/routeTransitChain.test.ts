@@ -10,7 +10,7 @@ import {
   TRANSIT_CHAIN,
   INTERCITY_STITCH,
 } from '@wayfinder/shared/mocks';
-import { chainTransitLegs, buildTransitRoute } from './routeTransitChain.js';
+import { chainTransitLegs, buildTransitRoute } from '@wayfinder/shared/transit';
 
 const C = { lat: 37.5, lng: 127.0 };
 
