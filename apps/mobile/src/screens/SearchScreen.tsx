@@ -21,6 +21,7 @@ import type { CameraState, Place } from '@wayfinder/shared';
 import type { PlaceProvider } from '@wayfinder/shared/mocks';
 import { mockPlaceProvider } from '@wayfinder/shared/mocks';
 import { cameraForPlace } from './searchCamera.js';
+import { usePlaceSearch } from '../state/placeSearch.js';
 
 export interface SearchScreenProps {
   /** 검색 공급자 (기본: 데모 모드 mock provider). */
@@ -37,15 +38,12 @@ export function SearchScreen({
   onCancel,
 }: SearchScreenProps): React.ReactElement {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Place[]>([]);
+  const { results, status, setQuery: runSearch } = usePlaceSearch(provider);
 
-  const handleChange = useCallback(
-    (text: string) => {
-      setQuery(text);
-      void provider.search(text).then(setResults);
-    },
-    [provider],
-  );
+  const handleChange = (text: string): void => {
+    setQuery(text);
+    runSearch(text);
+  };
 
   const handleSelect = useCallback(
     (place: Place) => {
@@ -83,9 +81,9 @@ export function SearchScreen({
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          query.trim().length > 0 ? (
-            <Text style={styles.empty}>검색 결과가 없어요.</Text>
-          ) : null
+          status === 'idle' ? null : (
+            <Text style={styles.empty}>{EMPTY_TEXT[status]}</Text>
+          )
         }
         renderItem={({ item }) => (
           <Pressable
@@ -104,6 +102,12 @@ export function SearchScreen({
     </View>
   );
 }
+
+const EMPTY_TEXT = {
+  loading: '검색 중…',
+  done: '검색 결과가 없어요.',
+  error: '검색에 실패했어요. 잠시 후 다시 시도해 주세요.',
+} as const;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#fff' },

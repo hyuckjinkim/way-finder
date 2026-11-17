@@ -25,6 +25,7 @@ import type { PlaceProvider } from '@wayfinder/shared/mocks';
 import { mockPlaceProvider } from '@wayfinder/shared/mocks';
 import type { ModeTabId } from '../route/modeTabs.js';
 import { DEFAULT_MODE_TAB, tabToMode } from '../route/modeTabs.js';
+import { usePlaceSearch } from '../state/placeSearch.js';
 import { ModeTabs } from '../route/ModeTabsBar.js';
 import type { WaypointEntry } from '../route/waypoints.js';
 import {
@@ -67,24 +68,20 @@ export function RouteInputScreen({
 
   const [focusedField, setFocusedField] = useState<FocusedField>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Place[]>([]);
+  const { results: searchResults, setQuery: runSearch } = usePlaceSearch(provider);
 
   const handleFocus = useCallback((field: FocusedField) => {
     setFocusedField(field);
     setSearchQuery('');
-    setSearchResults([]);
-  }, []);
+    runSearch('');
+  }, [runSearch]);
 
   const handleSearchChange = useCallback(
     (text: string) => {
       setSearchQuery(text);
-      if (text.trim().length === 0) {
-        setSearchResults([]);
-        return;
-      }
-      void provider.search(text).then(setSearchResults);
+      runSearch(text);
     },
-    [provider],
+    [runSearch],
   );
 
   const handleSelectPlace = useCallback(
@@ -105,7 +102,7 @@ export function RouteInputScreen({
       }
       setFocusedField(null);
       setSearchQuery('');
-      setSearchResults([]);
+      runSearch('');
     },
     [focusedField],
   );
@@ -118,7 +115,7 @@ export function RouteInputScreen({
       setWaypoints(added);
       setFocusedField({ waypoint: newIndex });
       setSearchQuery('');
-      setSearchResults([]);
+      runSearch('');
     }
   }, [waypoints]);
 
@@ -264,7 +261,7 @@ export function RouteInputScreen({
               onPress={() => {
                 setFocusedField(null);
                 setSearchQuery('');
-                setSearchResults([]);
+                runSearch('');
               }}
               accessibilityRole="button"
               accessibilityLabel="검색 취소"
