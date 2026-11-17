@@ -63,3 +63,24 @@ describe('apiClient — 프록시 URL env 변수명', () => {
     fetchSpy.mockRestore();
   });
 });
+
+// 회귀: `(process.env as any).EXPO_PUBLIC_X`는 babel 인라이너가 못 찾아 웹 번들에 값이 빠진다
+// (배포 웹이 데모 모드로 돌던 원인, 2026-11-18). 앱 소스에 캐스트 래핑 env 접근이 없어야 한다.
+describe('EXPO_PUBLIC env 접근 — 맨 점 표기만 (웹 인라인 조건)', () => {
+  it('src/·app/에 (process.env as …) 패턴 없음', async () => {
+    const { readdirSync, readFileSync, statSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        const p = join(dir, name);
+        if (statSync(p).isDirectory()) { if (name !== 'node_modules' && !name.startsWith('.')) walk(p); continue; }
+        if (!/\.tsx?$/.test(name) || /\.test\.tsx?$/.test(name)) continue;
+        if (/\(\s*process\.env\s+as\b/.test(readFileSync(p, 'utf8'))) offenders.push(p);
+      }
+    };
+    walk(join(__dirname, '..')); // src/
+    walk(join(__dirname, '../../app'));
+    expect(offenders).toEqual([]);
+  });
+});

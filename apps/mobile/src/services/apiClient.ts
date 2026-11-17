@@ -14,11 +14,10 @@
  * 변수명이 어긋나면 키를 넣어도 앱이 계속 데모 모드로 동작하므로 정식 이름을 먼저 읽는다.
  * 점 표기(`process.env.X`) 접근만 Metro가 정적 인라인하므로 점 표기를 사용한다.
  */
+// ⚠️ process.env를 `as any` 캐스트로 감싸면 babel 인라이너가 `process.env.X` 패턴을 못 찾아
+// 웹 번들에 값이 안 들어간다(배포 웹이 데모 모드로 돌던 원인, 2026-11-18). 반드시 맨 점 표기.
 const API_BASE_URL: string | undefined =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ((process.env as any).EXPO_PUBLIC_PROXY_BASE_URL as string | undefined) ??
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ((process.env as any).EXPO_PUBLIC_API_URL as string | undefined);
+  process.env.EXPO_PUBLIC_PROXY_BASE_URL || process.env.EXPO_PUBLIC_API_URL || undefined;
 
 /**
  * 데모 모드 플래그.
