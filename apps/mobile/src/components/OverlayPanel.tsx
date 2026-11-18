@@ -49,11 +49,13 @@ export function OverlayPanel({ children, initialSnap = 'full', title = '' }: Ove
   // 마운트 후 한 번 더 렌더해 실제 폭을 반영한다.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const placement = mounted ? panelPlacement(width) : 'bottom';
+  const placement = panelPlacement(width);
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      {placement === 'side' ? (
+      {/* SSR은 창 높이 0으로 시트 height:0을 굽고 하이드레이션이 그 인라인 스타일을 안 고친다 —
+          직접 진입(/route/input 새로고침) 시 시트가 안 보였다. 마운트 후에만 그린다. */}
+      {!mounted ? null : placement === 'side' ? (
         <FloatingCard title={title} maxHeight={height - CARD_INSET * 2}>
           {children}
         </FloatingCard>

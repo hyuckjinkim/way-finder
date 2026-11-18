@@ -87,7 +87,7 @@ async function fillRoute(page, mode) {
 
 await check('1 search 강남역 shows result <=5s', async (page) => {
   await page.goto(BASE, { waitUntil: 'load' });
-  await page.getByText('장소·주소 검색').or(page.getByRole('button', { name: '장소 검색' })).first().click();
+  await page.getByRole('search', { name: '장소 검색' }).click();
   const input = page.getByRole('textbox').first();
   await input.click();
   await typeSlow(page, '강남역');
@@ -100,7 +100,7 @@ await check('2 place detail 200 + name + map moved', async (page) => {
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(3000);
   const before = await mapSig(page);
-  await page.getByText('장소·주소 검색').or(page.getByRole('button', { name: '장소 검색' })).first().click();
+  await page.getByRole('search', { name: '장소 검색' }).click();
   await page.getByRole('textbox').first().click();
   await typeSlow(page, '강남역');
   const row = page.getByRole('button', { name: /강남역/ }).first();
