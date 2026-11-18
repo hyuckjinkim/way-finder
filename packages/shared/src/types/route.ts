@@ -139,6 +139,9 @@ export interface TransitMeta {
   lineName: string;
   lineType: 'subway' | 'bus' | 'train' | 'express' | 'air';
   headsign?: string;
+  /** 승차·하차 정류장/역 이름 (있으면). */
+  fromStop?: string;
+  toStop?: string;
   /** 노선 공식색 (#RRGGBB) — 알 수 없으면 미존재. */
   lineColor?: string;
 }

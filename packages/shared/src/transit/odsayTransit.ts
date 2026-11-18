@@ -150,6 +150,8 @@ function subPathToLeg(sp: OdsaySubPath): RouteLeg {
     lineType: laneType(sp.trafficType),
     ...(lineColor ? { lineColor } : {}),
     ...(sp.way ? { headsign: sp.way } : {}),
+    ...(sp.startName ? { fromStop: sp.startName } : {}),
+    ...(sp.endName ? { toStop: sp.endName } : {}),
   };
   return { start, end, mode: 'transit', durationSec, distanceM, coords, transit };
 }

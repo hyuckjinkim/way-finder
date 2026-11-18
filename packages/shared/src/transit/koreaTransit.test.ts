@@ -14,6 +14,7 @@ function path(payment: number, mapObj?: string, code = 2, busType = 11): OdsayPa
       {
         trafficType: 1, sectionTime: 20, distance: 9000,
         lane: [{ name: '수도권 2호선', subwayCode: code }],
+        startName: '구로디지털단지', endName: '강남',
         startX: 127.0, startY: 37.5, endX: 127.05, endY: 37.55,
       },
       {
@@ -53,6 +54,7 @@ describe('koreaTransitRoute', () => {
     const r = await koreaTransitRoute(req(), 'k');
     expect(r.fare).toBe(1550);
     expect(r.legs.map((l) => l.transit?.lineColor)).toEqual([undefined, '#00A84D', '#3D5BAB']);
+    expect(r.legs[1]?.transit).toMatchObject({ fromStop: '구로디지털단지', toStop: '강남' });
     expect(r.alternatives?.[0]?.legs.map((l) => l.transit?.lineColor)).toEqual([undefined, undefined, undefined]);
     expect(r.alternatives?.[0]?.fare).toBe(1250);
   });
