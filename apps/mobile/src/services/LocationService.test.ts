@@ -92,3 +92,35 @@ describe('LocationService.getCurrentCamera', () => {
     expect(cam).toEqual(DEFAULT_CAMERA);
   });
 });
+
+describe('LocationService.getUserLocation', () => {
+  const grant = (status: string) => ({
+    status: status as Location.PermissionStatus,
+    granted: status === 'granted',
+    canAskAgain: true,
+    expires: 'never' as const,
+  });
+
+  it('허용 + 조회 성공 — 좌표 반환', async () => {
+    mockRequestPermission.mockResolvedValue(grant('granted'));
+    mockGetPosition.mockResolvedValue({
+      coords: { latitude: 35.1, longitude: 129.0 },
+    } as Location.LocationObject);
+    const { getUserLocation } = await import('./LocationService.js');
+    expect(await getUserLocation()).toEqual({ status: 'ok', coord: { lat: 35.1, lng: 129.0 } });
+  });
+
+  it('권한 거부 — denied, 위치 조회 안 함', async () => {
+    mockRequestPermission.mockResolvedValue(grant('denied'));
+    const { getUserLocation } = await import('./LocationService.js');
+    expect(await getUserLocation()).toEqual({ status: 'denied' });
+    expect(mockGetPosition).not.toHaveBeenCalled();
+  });
+
+  it('조회 에러 — error', async () => {
+    mockRequestPermission.mockResolvedValue(grant('granted'));
+    mockGetPosition.mockRejectedValue(new Error('timeout'));
+    const { getUserLocation } = await import('./LocationService.js');
+    expect(await getUserLocation()).toEqual({ status: 'error' });
+  });
+});

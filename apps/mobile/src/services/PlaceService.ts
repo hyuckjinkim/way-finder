@@ -12,8 +12,8 @@
  *   getGoogleData → 구글 평점·리뷰만 (구글 탭 활성화 시 단독 호출)
  * 이렇게 분리해야 §11 과금 방어선(구글 탭 열기 전 구글 호출 없음)이 서비스 레이어에서 보장된다.
  */
-import type { Place, PlaceDetail, Rating, Review } from '@wayfinder/shared';
-import { placesSearchPath, placeDetailPath, placeGooglePath } from '@wayfinder/shared/api';
+import type { LatLng, Place, PlaceDetail, Rating, Review } from '@wayfinder/shared';
+import { placesSearchPath, placeDetailPath, placeGooglePath, type PlaceHint } from '@wayfinder/shared/api';
 import { mockPlaceProvider } from '@wayfinder/shared/mocks';
 import { apiFetch, isDemoMode } from './apiClient.js';
 
@@ -23,13 +23,18 @@ export interface GooglePlaceData {
   reviews: Review[];
 }
 
+/** 검색 요청 경로 — near(지도 중심·GPS)가 있으면 프록시가 거리순·거리값을 채운다. */
+export function searchPath(query: string, near?: LatLng): string {
+  const base = `${placesSearchPath}?q=${encodeURIComponent(query)}`;
+  return near ? `${base}&lat=${near.lat}&lng=${near.lng}` : base;
+}
+
 /** 검색 결과 반환. */
-export async function search(query: string): Promise<Place[]> {
+export async function search(query: string, near?: LatLng): Promise<Place[]> {
   if (isDemoMode) {
     return mockPlaceProvider.search(query);
   }
-  const encoded = encodeURIComponent(query);
-  const data = await apiFetch(`${placesSearchPath}?q=${encoded}`);
+  const data = await apiFetch(searchPath(query, near));
   return data as Place[];
 }
 
@@ -38,11 +43,12 @@ export async function search(query: string): Promise<Place[]> {
  * 실 모드에서 구글 평점·리뷰는 포함하지 않는다(lazy — getGoogleData 별도 호출).
  * 데모 모드에서는 fixture 전체 반환(테스트·UI 확인용 — 구글 데이터 포함).
  */
-export async function getDetail(id: string): Promise<PlaceDetail> {
+export async function getDetail(id: string, hint?: PlaceHint): Promise<PlaceDetail> {
   if (isDemoMode) {
     return mockPlaceProvider.getDetail(id);
   }
-  const data = await apiFetch(placeDetailPath(id));
+  // 카카오는 id 단건 조회가 없어 프록시가 이름·좌표 힌트로 찾는다(힌트 없으면 캐시된 장소만).
+  const data = await apiFetch(placeDetailPath(id, hint));
   return data as PlaceDetail;
 }
 

@@ -17,8 +17,10 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import type { Place, PlaceDetail } from '@wayfinder/shared';
+import type { PlaceHint } from '@wayfinder/shared/api';
 import { search, getDetail, getGoogleData } from '../services/PlaceService.js';
 import type { GooglePlaceData } from '../services/PlaceService.js';
+import { ApiError } from '../services/apiClient.js';
 
 // ─── 캐시 키 팩토리 ────────────────────────────────────────────────────────────
 
@@ -41,14 +43,22 @@ export function searchQueryOptions(
   };
 }
 
+/** 404는 다시 해도 같다 — 즉시 에러 UI(다시 시도/닫기)로. 그 외는 최대 2번 재시도. */
+export function shouldRetryPlaceDetail(failureCount: number, error: Error): boolean {
+  if (error instanceof ApiError && error.status === 404) return false;
+  return failureCount < 2;
+}
+
 export function placeDetailQueryOptions(
   id: string | null,
+  hint?: PlaceHint,
 ): UseQueryOptions<PlaceDetail, Error> {
   return {
     queryKey: queryKeys.detail(id ?? ''),
-    queryFn: () => getDetail(id!),
+    queryFn: () => getDetail(id!, hint),
     enabled: id !== null,
     staleTime: 60_000, // 1분
+    retry: shouldRetryPlaceDetail,
   };
 }
 
@@ -80,8 +90,9 @@ export function useSearchQuery(
 /** 장소 기본 정보 + 블로그를 조회한다 (구글 데이터 미포함). */
 export function usePlaceDetailQuery(
   id: string | null,
+  hint?: PlaceHint,
 ): UseQueryResult<PlaceDetail, Error> {
-  return useQuery(placeDetailQueryOptions(id));
+  return useQuery(placeDetailQueryOptions(id, hint));
 }
 
 /**

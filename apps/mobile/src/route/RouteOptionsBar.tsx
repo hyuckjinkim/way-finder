@@ -132,7 +132,8 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 6,
   },
@@ -149,8 +150,8 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   stepBtn: {
-    width: 40,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 6,

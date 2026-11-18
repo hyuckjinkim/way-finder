@@ -11,7 +11,9 @@
  * 실행: node_modules/.bin/vitest run --config apps/mobile/src/__tests__/vitest.config.ts
  */
 import { describe, it, expect } from 'vitest';
+import { ApiError } from '../services/apiClient.js';
 import {
+  shouldRetryPlaceDetail,
   queryKeys,
   searchQueryOptions,
   placeDetailQueryOptions,
@@ -109,5 +111,16 @@ describe('googleDataQueryOptions — 구글 캐시 키 분리', () => {
     const detailOpts = placeDetailQueryOptions(id);
     const googleOpts = googleDataQueryOptions(id, true);
     expect(detailOpts.queryKey).not.toEqual(googleOpts.queryKey);
+  });
+});
+
+describe('shouldRetryPlaceDetail — 404는 재시도하지 않는다', () => {
+  it('404 ApiError는 즉시 실패', () => {
+    expect(shouldRetryPlaceDetail(0, new ApiError(404, 'not found'))).toBe(false);
+  });
+  it('그 외 오류는 2번까지 재시도', () => {
+    expect(shouldRetryPlaceDetail(0, new ApiError(502, 'bad gateway'))).toBe(true);
+    expect(shouldRetryPlaceDetail(1, new Error('network'))).toBe(true);
+    expect(shouldRetryPlaceDetail(2, new Error('network'))).toBe(false);
   });
 });

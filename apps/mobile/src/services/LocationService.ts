@@ -10,7 +10,7 @@
  * - 테스트: expo-location 전체를 vi.mock으로 대체 — 네이티브 코드 미실행.
  */
 import * as Location from 'expo-location';
-import type { CameraState } from '@wayfinder/shared';
+import type { CameraState, LatLng } from '@wayfinder/shared';
 
 /** 권한 거부·위치 불가 시 사용하는 기본 카메라 (서울 시청). */
 export const DEFAULT_CAMERA: CameraState = {
@@ -45,5 +45,28 @@ export async function getCurrentCamera(): Promise<CameraState> {
   } catch (err) {
     console.warn('[LocationService] 위치 조회 실패 — 기본 카메라 사용', err);
     return DEFAULT_CAMERA;
+  }
+}
+
+/** 내 위치 조회 결과 — 거부와 실패를 구분해 호출자가 안내 문구를 고를 수 있게 한다. */
+export type UserLocationResult =
+  | { status: 'ok'; coord: LatLng }
+  | { status: 'denied' | 'error' };
+
+/**
+ * 현재 위치 좌표만 조회한다(카메라 폴백 없음). 홈의 파란 점·시작 시 내 주변 센터링용.
+ * 웹에서는 권한이 미정이면 브라우저가 여기서 권한 프롬프트를 띄운다.
+ */
+export async function getUserLocation(): Promise<UserLocationResult> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== Location.PermissionStatus.GRANTED) return { status: 'denied' };
+    const loc = await Location.getCurrentPositionAsync({
+      accuracy: Location.LocationAccuracy.Balanced,
+    });
+    return { status: 'ok', coord: { lat: loc.coords.latitude, lng: loc.coords.longitude } };
+  } catch (err) {
+    console.warn('[LocationService] 위치 조회 실패', err);
+    return { status: 'error' };
   }
 }

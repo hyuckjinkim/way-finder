@@ -16,12 +16,14 @@ import type { ModeTabId } from './modeTabs.js';
 export interface ModeTabsProps {
   active: ModeTabId;
   onChange: (mode: TravelMode) => void;
+  /** 노출할 탭(미지정=전체). capabilities로 미지원 모드를 숨길 때 쓴다. */
+  modes?: readonly ModeTabId[];
 }
 
-export function ModeTabs({ active, onChange }: ModeTabsProps): React.ReactElement {
+export function ModeTabs({ active, onChange, modes = MODE_TAB_ORDER }: ModeTabsProps): React.ReactElement {
   return (
     <View style={styles.bar} accessibilityRole="tablist">
-      {MODE_TAB_ORDER.map((tab) => {
+      {MODE_TAB_ORDER.filter((tab) => modes.includes(tab)).map((tab) => {
         const isActive = tab === active;
         return (
           <Pressable
@@ -53,7 +55,8 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 6,
   },

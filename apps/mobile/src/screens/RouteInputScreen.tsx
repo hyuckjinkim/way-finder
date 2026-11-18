@@ -10,7 +10,7 @@
  * 라우트 배선·실 서비스 연결은 E 스트림. 이 화면은 provider·콜백 계약만 노출한다.
  * plain RN만 사용 — Reanimated·gesture-handler 비의존.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -20,13 +20,18 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import type { Place, RouteRequest, LatLng } from '@wayfinder/shared';
+import type { Place, RouteRequest, LatLng, TravelMode } from '@wayfinder/shared';
+import type { Capabilities } from '@wayfinder/shared/api';
+import { routeRegion } from '@wayfinder/shared/region';
 import type { PlaceProvider } from '@wayfinder/shared/mocks';
 import { mockPlaceProvider } from '@wayfinder/shared/mocks';
 import type { ModeTabId } from '../route/modeTabs.js';
 import { DEFAULT_MODE_TAB, tabToMode } from '../route/modeTabs.js';
 import { usePlaceSearch } from '../state/placeSearch.js';
 import { ModeTabs } from '../route/ModeTabsBar.js';
+import { availableModes } from '../route/capabilities.js';
+import { loadLastMode, saveLastMode } from '../route/lastMode.js';
+import type { RouteUrlState } from '../route/routeUrl.js';
 import type { WaypointEntry } from '../route/waypoints.js';
 import {
   addWaypoint,
@@ -41,8 +46,19 @@ import {
 export interface RouteInputScreenProps {
   /** 검색 공급자 (기본: 데모 모드 mock provider). */
   provider?: PlaceProvider;
-  /** 경로 탐색 제출 시 호출. stops가 최소 2개(출발+도착)여야 활성화된다. */
-  onSubmit?: (req: RouteRequest) => void;
+  /**
+   * 경로 탐색 제출 시 호출. stops가 최소 2개(출발+도착)여야 활성화된다.
+   * 두 번째 인자는 이름이 붙은 입력 상태 — 결과 화면 URL(routeQuery)에 쓴다.
+   */
+  onSubmit?: (req: RouteRequest, urlState: RouteUrlState) => void;
+  /** 프리필(URL ?o&d&mode 등). */
+  initial?: { origin?: StopEntry; destination?: StopEntry; mode?: TravelMode };
+  /** 현재 위치 조회 — 성공하면 출발지를 "내 위치"로 채운다(출발지 프리필이 없을 때만). null=실패/폴백. */
+  locate?: () => Promise<LatLng | null>;
+  /** 프록시 지원 모드 — undefined면 전 모드 노출. */
+  capabilities?: Capabilities;
+  /** 선택된 이동수단이 바뀔 때(초기값 포함) 호출. */
+  onModeChange?: (mode: TravelMode) => void;
   /** 뒤로/취소. */
   onCancel?: () => void;
 }
@@ -51,7 +67,7 @@ export interface RouteInputScreenProps {
 type FocusedField = 'origin' | 'destination' | { waypoint: number } | null;
 
 /** 경유지 엔트리 + 좌표를 저장하는 로컬 상태용 타입. */
-interface StopEntry {
+export interface StopEntry {
   label: string;
   coord: LatLng;
 }
@@ -60,11 +76,57 @@ export function RouteInputScreen({
   provider = mockPlaceProvider,
   onSubmit,
   onCancel,
+  initial,
+  locate,
+  capabilities,
+  onModeChange,
 }: RouteInputScreenProps): React.ReactElement {
-  const [origin, setOrigin] = useState<StopEntry | null>(null);
-  const [destination, setDestination] = useState<StopEntry | null>(null);
+  const [origin, setOrigin] = useState<StopEntry | null>(initial?.origin ?? null);
+  const [destination, setDestination] = useState<StopEntry | null>(initial?.destination ?? null);
   const [waypoints, setWaypoints] = useState<WaypointEntry[]>([]);
-  const [mode, setMode] = useState<ModeTabId>(DEFAULT_MODE_TAB);
+  const [mode, setMode] = useState<ModeTabId>(initial?.mode ?? DEFAULT_MODE_TAB);
+
+  // 기본 출발지 = 내 위치. 사용자가 먼저 고른 출발지는 덮어쓰지 않는다.
+  useEffect(() => {
+    if (initial?.origin || !locate) return;
+    let alive = true;
+    void locate().then((coord) => {
+      if (alive && coord) setOrigin((cur) => cur ?? { label: '내 위치', coord });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [initial?.origin, locate]);
+
+  // 마지막 이동수단 복원 — SSR 하이드레이션 불일치를 피해 마운트 후 적용(URL mode가 우선).
+  useEffect(() => {
+    if (initial?.mode) return;
+    const last = loadLastMode();
+    if (last) setMode(last);
+  }, [initial?.mode]);
+
+  const selectMode = useCallback((m: TravelMode) => {
+    setMode(m);
+    saveLastMode(m);
+  }, []);
+
+  // 경로 지역(출발·도착·경유지 중 정해진 것)에서 지원하는 모드만 탭에 노출.
+  const stopCoords = [origin?.coord, destination?.coord, ...filterSetWaypoints(waypoints).map((w) => w.coord)].filter(
+    (c): c is LatLng => c !== undefined,
+  );
+  const region = stopCoords.length >= 2 ? routeRegion(stopCoords) : undefined;
+  const modes = useMemo(() => availableModes(capabilities, region), [capabilities, region]);
+  useEffect(() => {
+    if (!modes.includes(mode)) setMode(modes[0]!);
+  }, [modes, mode]);
+  useEffect(() => {
+    onModeChange?.(mode);
+  }, [mode, onModeChange]);
+
+  const swapStops = useCallback(() => {
+    setOrigin(destination);
+    setDestination(origin);
+  }, [origin, destination]);
 
   const [focusedField, setFocusedField] = useState<FocusedField>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,7 +198,11 @@ export function RouteInputScreen({
     if (!origin || !destination) return;
     // 미설정 경유지({0,0} placeholder, label='')는 제출에서 제외 — 장소를 고른 경유지만 stops에 포함.
     const stops = toStops(origin.coord, filterSetWaypoints(waypoints), destination.coord);
-    onSubmit?.({ stops, mode: tabToMode(mode) });
+    const setWaypointsOnly = filterSetWaypoints(waypoints);
+    onSubmit?.(
+      { stops, mode: tabToMode(mode) },
+      { origin, destination, waypoints: setWaypointsOnly, mode: tabToMode(mode) },
+    );
   }, [origin, destination, waypoints, mode, onSubmit]);
 
   const canSubmit = origin !== null && destination !== null;
@@ -153,22 +219,33 @@ export function RouteInputScreen({
   return (
     <View style={styles.root}>
       {/* 이동 수단 탭 */}
-      <ModeTabs active={mode} onChange={setMode} />
+      <ModeTabs active={mode} onChange={selectMode} modes={modes} />
 
       {/* 정지점 입력 섹션 */}
       <ScrollView style={styles.stopsScroll} keyboardShouldPersistTaps="handled">
         {/* 출발지 */}
-        <Pressable
-          style={styles.stopRow}
-          onPress={() => handleFocus('origin')}
-          accessibilityRole="button"
-          accessibilityLabel="출발지 선택"
-        >
-          <View style={[styles.dot, styles.dotOrigin]} />
-          <Text style={origin ? styles.stopLabel : styles.stopPlaceholder}>
-            {origin ? origin.label : '출발지를 입력하세요'}
-          </Text>
-        </Pressable>
+        <View style={styles.originRow}>
+          <Pressable
+            style={[styles.stopRow, styles.stopRowFlex, styles.originPress]}
+            onPress={() => handleFocus('origin')}
+            accessibilityRole="button"
+            accessibilityLabel="출발지 선택"
+          >
+            <View style={[styles.dot, styles.dotOrigin]} />
+            <Text style={origin ? styles.stopLabel : styles.stopPlaceholder}>
+              {origin ? origin.label : '출발지를 입력하세요'}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={swapStops}
+            disabled={!origin && !destination}
+            style={[styles.swapBtn, !origin && !destination && styles.actionBtnDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel="출발지와 도착지 바꾸기"
+          >
+            <Text style={styles.swapText}>⇅</Text>
+          </Pressable>
+        </View>
 
         {/* 경유지 */}
         {waypoints.map((wp, idx) => (
@@ -365,14 +442,27 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   actionBtn: {
-    padding: 6,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  originRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  originPress: { borderBottomWidth: 0 },
+  swapBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  swapText: { fontSize: 20, color: '#1a73e8' },
   actionBtnDisabled: { opacity: 0.3 },
   actionText: { fontSize: 12, color: '#555' },
   removeText: { color: '#e53935' },
   addWaypointBtn: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    minHeight: 44,
+    justifyContent: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#eee',
   },
@@ -399,7 +489,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#111',
   },
-  cancelBtn: { paddingLeft: 12 },
+  cancelBtn: { paddingLeft: 12, minHeight: 44, justifyContent: 'center' },
   cancelText: { fontSize: 15, color: '#1a73e8' },
   empty: { padding: 24, textAlign: 'center', color: '#999', fontSize: 14 },
   resultRow: {

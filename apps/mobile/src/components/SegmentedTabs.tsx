@@ -52,13 +52,14 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    paddingVertical: 8,
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 6,
   },
   segmentActive: {
     backgroundColor: '#fff',
   },
-  label: { fontSize: 14, color: '#777' },
+  label: { fontSize: 14, color: '#6b7280' },
   labelActive: { color: '#1a1a1a', fontWeight: '600' },
 });

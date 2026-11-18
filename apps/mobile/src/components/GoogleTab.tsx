@@ -77,10 +77,10 @@ export function GoogleTab({
 const styles = StyleSheet.create({
   container: { paddingVertical: 4 },
   empty: { padding: 24, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: '#888' },
+  emptyText: { fontSize: 14, color: '#6b7280' },
   ratingRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 8 },
   score: { fontSize: 20, fontWeight: '700', color: '#f5a623' },
-  count: { fontSize: 13, color: '#888', marginLeft: 8 },
+  count: { fontSize: 13, color: '#6b7280', marginLeft: 8 },
   review: {
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,

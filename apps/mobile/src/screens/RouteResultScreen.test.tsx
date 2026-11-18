@@ -76,6 +76,29 @@ describe('RouteResultScreen — 렌더 (데모 모드)', () => {
     expect(html.length).toBeGreaterThan(0);
   });
 
+  it('onBack 미지정 시 화면 내 ← 버튼 없음 (스택 헤더와 중복 방지)', () => {
+    const html = render(<RouteResultScreen route={WALK_SIMPLE} />);
+    expect(html).not.toContain('←');
+  });
+
+  it('웹에서는 onStartNav가 있어도 "안내 시작" 미노출', () => {
+    const html = render(<RouteResultScreen route={WALK_SIMPLE} onStartNav={() => {}} />);
+    expect(html).not.toContain('안내 시작');
+  });
+
+  it('대안 경로 + 요금: 경로 카드 N개와 요금 표시', () => {
+    const route = {
+      ...TRANSIT_CHAIN,
+      fare: 1650,
+      alternatives: [{ ...TRANSIT_CHAIN, totalDurationSec: 3000, fare: 1850 }],
+    };
+    const html = render(<RouteResultScreen route={route} />);
+    expect(html).toContain('1,650원');
+    expect(html).toContain('1,850원');
+    expect(html).toContain('경로 2,');
+    expect(html).toContain('도착');
+  });
+
   it('뒤로 가기 버튼 포함', () => {
     const html = render(
       <RouteResultScreen route={WALK_SIMPLE} onBack={() => {}} />,
@@ -198,7 +221,7 @@ describe('RouteResultScreen — 오류 상태 (회귀: 오류 시 "탐색 중" �
     const html = render(
       <RouteResultScreen route={null} error={new ApiError(501, 'API error 501')} onBack={() => {}} />,
     );
-    expect(html).toContain('이동수단 길찾기를 지원하지 않습니다');
+    expect(html).toContain('이 이동수단은 아직 준비 중이에요');
     expect(html).not.toContain('탐색 중');
   });
 
@@ -206,7 +229,7 @@ describe('RouteResultScreen — 오류 상태 (회귀: 오류 시 "탐색 중" �
     const html = render(
       <RouteResultScreen route={null} error={new ApiError(502, 'API error 502')} onBack={() => {}} />,
     );
-    expect(html).toContain('경로를 찾지 못했습니다');
-    expect(html).not.toContain('지원하지 않습니다');
+    expect(html).toContain('경로를 찾지 못했어요');
+    expect(html).not.toContain('준비 중이에요');
   });
 });

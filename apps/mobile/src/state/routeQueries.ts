@@ -15,7 +15,9 @@ import {
 } from '@tanstack/react-query';
 import { useRef, useEffect, useState } from 'react';
 import type { LatLng, Route, RoutePreference, TravelMode } from '@wayfinder/shared';
+import type { Capabilities } from '@wayfinder/shared/api';
 import { getRoute, isModeUnavailable } from '../services/RouteService.js';
+import { getCapabilities } from '../services/CapabilitiesService.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
 
 // ─── 캐시 키 팩토리 ────────────────────────────────────────────────────────────
@@ -134,4 +136,18 @@ export function useRouteQuery(
   return useQuery(
     routeQueryOptions(debouncedStops, debouncedMode, debouncedPreference, debouncedMaxExtraMinutes),
   );
+}
+
+// ─── capabilities ───────────────────────────────────────────────────────────────
+
+/** 지원 이동수단 — 세션 동안 거의 안 바뀌므로 길게 캐시. 실패 시 data=undefined → 화면은 전 모드 노출. */
+export const capabilitiesQueryOptions: UseQueryOptions<Capabilities, Error> = {
+  queryKey: ['capabilities'],
+  queryFn: getCapabilities,
+  staleTime: 60 * 60_000,
+  retry: 1,
+};
+
+export function useCapabilities(): Capabilities | undefined {
+  return useQuery(capabilitiesQueryOptions).data;
 }

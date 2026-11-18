@@ -54,4 +54,22 @@ describe('createPlaceSearcher', () => {
     s.setQuery('  ');
     expect(states.at(-1)).toEqual({ results: [], status: 'idle' });
   });
+
+  it('near를 검색에 실어 보낸다(getter는 검색 시점 값)', () => {
+    const p = controllable();
+    let center = { lat: 37.5, lng: 127.0 };
+    const s = createPlaceSearcher(p, () => {}, 250, () => center);
+    s.setQuery('카페');
+    center = { lat: 35.1, lng: 129.0 }; // 디바운스 중 지도가 움직임
+    vi.advanceTimersByTime(250);
+    expect(p.search).toHaveBeenCalledWith('카페', { lat: 35.1, lng: 129.0 });
+  });
+
+  it('near가 없으면 기존처럼 질의만 넘긴다(하위호환)', () => {
+    const p = controllable();
+    const s = createPlaceSearcher(p, () => {}, 250);
+    s.setQuery('카페');
+    vi.advanceTimersByTime(250);
+    expect(p.search).toHaveBeenCalledWith('카페');
+  });
 });

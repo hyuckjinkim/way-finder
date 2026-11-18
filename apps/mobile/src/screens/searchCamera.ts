@@ -7,6 +7,6 @@ import type { CameraState, Place } from '@wayfinder/shared';
 /** 장소 선택 시 이동할 카메라(장소 좌표 + 상세용 근접 줌). */
 export const SELECTED_PLACE_ZOOM = 16;
 
-export function cameraForPlace(place: Place): CameraState {
+export function cameraForPlace(place: Pick<Place, 'coord'>): CameraState {
   return { center: place.coord, zoom: SELECTED_PLACE_ZOOM };
 }

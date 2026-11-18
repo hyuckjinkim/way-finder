@@ -108,3 +108,15 @@ describe('PlaceService — 실 모드 (fetch 모킹)', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('PlaceService.searchPath — 검색에 위치 실어 보내기', () => {
+  it('near가 있으면 lat/lng를 덧붙인다', async () => {
+    const { searchPath } = await import('./PlaceService.js');
+    expect(searchPath('카페', { lat: 37.5, lng: 127.02 })).toBe('/v1/places/search?q=%EC%B9%B4%ED%8E%98&lat=37.5&lng=127.02');
+  });
+
+  it('near가 없으면 q만', async () => {
+    const { searchPath } = await import('./PlaceService.js');
+    expect(searchPath('카페')).toBe('/v1/places/search?q=%EC%B9%B4%ED%8E%98');
+  });
+});

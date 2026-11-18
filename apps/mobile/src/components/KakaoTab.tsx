@@ -50,7 +50,7 @@ export function KakaoTab({ posts, moreUrl, onOpenLink }: KakaoTabProps): React.R
 const styles = StyleSheet.create({
   container: { paddingVertical: 4 },
   empty: { padding: 24, alignItems: 'center' },
-  emptyText: { fontSize: 14, color: '#888' },
+  emptyText: { fontSize: 14, color: '#6b7280' },
   item: {
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -58,5 +58,5 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 15, fontWeight: '600', color: '#222' },
   snippet: { fontSize: 13, color: '#555', marginTop: 2 },
-  meta: { fontSize: 12, color: '#999', marginTop: 4 },
+  meta: { fontSize: 12, color: '#6b7280', marginTop: 4 },
 });

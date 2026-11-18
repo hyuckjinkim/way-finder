@@ -1,49 +1,210 @@
 /**
- * 지도를 가리지 않는 오버레이 패널 — 검색·경로 입력용.
+ * 지도를 가리지 않는 오버레이 패널 — 검색·경로 입력·장소 상세용.
  *
  * 라우트를 transparentModal로 띄우면 아래 홈 지도가 계속 렌더되고, 이 패널만 그 위에 얹힌다.
- * - 넓은 화면(태블릿·PC): 좌측 사이드 패널
- * - 좁은 화면(폰): 상단 시트 — 아래쪽 지도 영역이 보이고 조작 가능
+ * - 폰(<768): 네이버식 바텀시트. 스냅 30%(엿보기) / 60% / 90%, 핸들을 드래그(터치·마우스 모두).
+ * - 넓은 화면(≥768): 좌측 플로팅 카드(여백 16, 폭 380, 라운드 16, 그림자). 높이는 내용에 맞고
+ *   화면-32까지, 헤더의 화살표로 접는다.
+ * 패널 밖(지도 영역) 터치는 아래 지도로 통과한다(box-none).
  */
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  PanResponder,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type ViewStyle,
+} from 'react-native';
+import {
+  CARD_INSET,
+  CARD_WIDTH,
+  SNAP_FRACTIONS,
+  panelPlacement,
+  pickSnap,
+  snapHeights,
+  type SnapName,
+} from './sheetSnap';
 
-/** 이 너비 이상이면 좌측 패널. */
-export const SIDE_PANEL_MIN_WIDTH = 768;
+export { SIDE_PANEL_MIN_WIDTH, panelPlacement } from './sheetSnap';
 
-export type PanelPlacement = 'side' | 'top';
-
-export function panelPlacement(windowWidth: number): PanelPlacement {
-  return windowWidth >= SIDE_PANEL_MIN_WIDTH ? 'side' : 'top';
+export interface OverlayPanelProps {
+  children: React.ReactNode;
+  /** 폰 바텀시트의 처음 높이(기본 full — 검색·경로 입력). 장소 상세는 'peek'. */
+  initialSnap?: SnapName;
+  /** 데스크톱 카드 헤더 제목. */
+  title?: string;
 }
 
-export function OverlayPanel({ children }: { children: React.ReactNode }): React.ReactElement {
-  const { width } = useWindowDimensions();
-  // 웹 정적 렌더(SSR)는 폭을 모른 채 'top'으로 그리고, 하이드레이션은 서버 스타일을 고치지 않는다.
+const HANDLE_ZONE = 44;
+// 웹 터치 드래그 시 브라우저 스크롤이 제스처를 가로채지 않게.
+const NO_TOUCH_ACTION = Platform.select({ web: { touchAction: 'none' } as unknown as ViewStyle, default: {} });
+
+export function OverlayPanel({ children, initialSnap = 'full', title = '' }: OverlayPanelProps): React.ReactElement {
+  const { width, height } = useWindowDimensions();
+  // 웹 정적 렌더(SSR)는 폭을 모른 채 그리고, 하이드레이션은 서버 스타일을 고치지 않는다.
   // 마운트 후 한 번 더 렌더해 실제 폭을 반영한다.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const placement = mounted ? panelPlacement(width) : 'top';
+  const placement = mounted ? panelPlacement(width) : 'bottom';
+
   return (
-    // box-none: 패널 밖(지도 영역) 터치는 아래 지도로 통과
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <View style={[styles.panel, placement === 'side' ? styles.side : styles.top]}>{children}</View>
+      {placement === 'side' ? (
+        <FloatingCard title={title} maxHeight={height - CARD_INSET * 2}>
+          {children}
+        </FloatingCard>
+      ) : (
+        <BottomSheet windowHeight={height} initialSnap={initialSnap}>
+          {children}
+        </BottomSheet>
+      )}
     </View>
   );
 }
 
+function FloatingCard({
+  children,
+  title,
+  maxHeight,
+}: {
+  children: React.ReactNode;
+  title: string;
+  maxHeight: number;
+}): React.ReactElement {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <View style={[styles.card, { maxHeight }]}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Pressable
+          onPress={() => setCollapsed((c) => !c)}
+          accessibilityRole="button"
+          accessibilityLabel={collapsed ? '패널 펼치기' : '패널 접기'}
+          accessibilityState={{ expanded: !collapsed }}
+          style={styles.chevron}
+        >
+          <Text style={styles.chevronText}>{collapsed ? '▾' : '▴'}</Text>
+        </Pressable>
+      </View>
+      {/* display:none으로 접어 내부 상태(입력값·스크롤)를 보존한다. */}
+      <View style={collapsed ? styles.hidden : styles.cardBody}>{children}</View>
+    </View>
+  );
+}
+
+function BottomSheet({
+  children,
+  windowHeight,
+  initialSnap,
+}: {
+  children: React.ReactNode;
+  windowHeight: number;
+  initialSnap: SnapName;
+}): React.ReactElement {
+  const snaps = useMemo(() => snapHeights(windowHeight), [windowHeight]);
+  const [minH, , maxH] = snaps;
+  const sheetH = useRef(new Animated.Value(Math.round(windowHeight * SNAP_FRACTIONS[initialSnap]))).current;
+  const current = useRef(Math.round(windowHeight * SNAP_FRACTIONS[initialSnap]));
+  const startH = useRef(current.current);
+  const snapsRef = useRef(snaps);
+  snapsRef.current = snaps;
+
+  const moveTo = (h: number): void => {
+    current.current = h;
+    Animated.timing(sheetH, { toValue: h, duration: 180, useNativeDriver: false }).start();
+  };
+
+  // 화면 크기(회전·리사이즈)가 바뀌면 가장 가까운 스냅으로 다시 맞춘다.
+  useEffect(() => {
+    moveTo(pickSnap(current.current, 0, snaps));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snaps]);
+
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          startH.current = current.current;
+        },
+        onPanResponderMove: (_e, g) => {
+          const h = Math.min(maxH, Math.max(minH, startH.current - g.dy));
+          current.current = h;
+          sheetH.setValue(h);
+        },
+        onPanResponderRelease: (_e, g) => {
+          // 탭(거의 안 움직임)은 다음 스냅으로 순환 — 마우스·키보드 사용자용.
+          if (Math.abs(g.dy) < 4 && Math.abs(g.dx) < 4) {
+            const s = snapsRef.current;
+            moveTo(s.find((h) => h > startH.current + 1) ?? minH);
+            return;
+          }
+          moveTo(pickSnap(current.current, -g.vy, snapsRef.current));
+        },
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [minH, maxH],
+  );
+
+  return (
+    <Animated.View style={[styles.sheet, { height: sheetH }]}>
+      <View
+        {...pan.panHandlers}
+        style={[styles.handleZone, NO_TOUCH_ACTION]}
+        accessibilityRole="adjustable"
+        accessibilityLabel="시트 높이 조절"
+      >
+        <View style={styles.handle} />
+      </View>
+      <View style={styles.sheetBody}>{children}</View>
+    </Animated.View>
+  );
+}
+
+const shadow = {
+  shadowColor: '#000',
+  shadowOpacity: 0.18,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 2 },
+  elevation: 8,
+} as const;
+
 const styles = StyleSheet.create({
-  panel: {
+  sheet: {
     position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#fff',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 8,
+    ...shadow,
   },
-  side: { top: 0, bottom: 0, left: 0, width: 400 },
-  // ponytail: 높이 60% 고정 — 드래그로 높이 조절이 필요해지면 바텀시트 라이브러리 검토
-  top: { top: 0, left: 0, right: 0, height: '60%', borderBottomLeftRadius: 16, borderBottomRightRadius: 16 },
+  handleZone: { height: HANDLE_ZONE, alignItems: 'center', justifyContent: 'center' },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#c4c7cc' },
+  sheetBody: { flex: 1 },
+  card: {
+    position: 'absolute',
+    top: CARD_INSET,
+    left: CARD_INSET,
+    width: CARD_WIDTH,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...shadow,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingLeft: 16 },
+  cardTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: '#374151' },
+  chevron: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  chevronText: { fontSize: 16, color: '#4b5563' },
+  cardBody: { flexShrink: 1, minHeight: 0, overflow: 'hidden' },
+  hidden: { display: 'none' },
 });

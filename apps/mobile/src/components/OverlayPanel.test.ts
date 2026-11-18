@@ -1,11 +1,59 @@
 import { describe, it, expect } from 'vitest';
-import { panelPlacement, SIDE_PANEL_MIN_WIDTH } from './OverlayPanel';
+import { panelPlacement, SIDE_PANEL_MIN_WIDTH, snapHeights, pickSnap, panelForPath, homeChrome } from './sheetSnap';
 
-describe('panelPlacement — 지도를 가리지 않는 패널 위치', () => {
-  it('폰 폭은 상단 시트', () => expect(panelPlacement(390)).toBe('top'));
-  it('태블릿·PC 폭은 좌측 패널', () => expect(panelPlacement(1280)).toBe('side'));
+describe('panelPlacement — 폰은 바텀시트, 넓은 화면은 플로팅 카드', () => {
+  it('폰 폭은 바텀시트', () => expect(panelPlacement(390)).toBe('bottom'));
+  it('태블릿·PC 폭은 좌측 카드', () => expect(panelPlacement(1280)).toBe('side'));
   it('경계값', () => {
-    expect(panelPlacement(SIDE_PANEL_MIN_WIDTH - 1)).toBe('top');
+    expect(panelPlacement(SIDE_PANEL_MIN_WIDTH - 1)).toBe('bottom');
     expect(panelPlacement(SIDE_PANEL_MIN_WIDTH)).toBe('side');
+  });
+});
+
+describe('snapHeights / pickSnap', () => {
+  const snaps = snapHeights(800); // 240 / 480 / 720
+  it('화면 높이의 30% / 60% / 90%', () => expect(snaps).toEqual([240, 480, 720]));
+  it('느린 드래그는 가장 가까운 스냅', () => {
+    expect(pickSnap(300, 0, snaps)).toBe(240);
+    expect(pickSnap(400, 0.1, snaps)).toBe(480);
+  });
+  it('빠르게 위로 쓸면 다음 큰 스냅, 아래로 쓸면 다음 작은 스냅', () => {
+    expect(pickSnap(250, 1.2, snaps)).toBe(480);
+    expect(pickSnap(700, -1.2, snaps)).toBe(480);
+  });
+  it('끝에서는 더 못 가고 그 자리에 머문다', () => {
+    expect(pickSnap(720, 2, snaps)).toBe(720);
+    expect(pickSnap(240, -2, snaps)).toBe(240);
+  });
+});
+
+describe('panelForPath', () => {
+  it.each([
+    ['/', 'none'],
+    ['/place/kakao%3A1', 'peek'],
+    ['/search', 'full'],
+    ['/route/input', 'full'],
+  ])('%s → %s', (path, panel) => expect(panelForPath(path)).toBe(panel));
+});
+
+describe('homeChrome — 패널과 홈 크롬 배치', () => {
+  it('패널이 없으면 검색바·FAB 모두 표시', () => {
+    const c = homeChrome('none', 390, 800);
+    expect(c.showSearchBar && c.showFabs).toBe(true);
+  });
+  it('데스크톱은 패널이 열리면 홈 검색바를 숨기고 카드 폭만큼 왼쪽을 비운다', () => {
+    const c = homeChrome('peek', 1280, 800);
+    expect(c.showSearchBar).toBe(false);
+    expect(c.fitPadding.left).toBeGreaterThan(396);
+  });
+  it('폰 엿보기 시트: FAB을 시트 위로 올리고 bottom 여백을 둔다', () => {
+    const c = homeChrome('peek', 390, 800);
+    expect(c.fabBottom).toBeGreaterThan(240);
+    expect(c.fitPadding.bottom).toBeGreaterThan(240);
+    expect(c.showSearchBar).toBe(true);
+  });
+  it('폰 전체 시트(검색·경로 입력)는 검색바·FAB을 숨긴다', () => {
+    const c = homeChrome('full', 390, 800);
+    expect(c.showSearchBar || c.showFabs).toBe(false);
   });
 });
