@@ -119,6 +119,16 @@ export function kakaoLevelToZoom(level: number): number {
 
 const SDK_BASE = 'https://dapi.kakao.com/v2/maps/sdk.js';
 
+/** app/+html.tsx가 선로드하는 SDK 스크립트 태그 id (있으면 재사용). */
+export const KAKAO_SDK_TAG_ID = 'kakao-sdk';
+// 선로드 태그가 이 시간 안에 load되지 않으면 직접 주입으로 폴백.
+const EARLY_TAG_TIMEOUT_MS = 10_000;
+
+/** SDK URL — +html.tsx 선로드와 동적 주입이 항상 같은 URL을 쓰도록 단일화. */
+export function kakaoSdkUrl(appKey: string): string {
+  return `${SDK_BASE}?appkey=${encodeURIComponent(appKey)}&autoload=false`;
+}
+
 let sdkPromise: Promise<KakaoMapsNamespace> | null = null;
 
 /** window.kakao 접근(타입 안전). */
@@ -152,10 +162,7 @@ export function loadKakaoSdk(appKey: string): Promise<KakaoMapsNamespace> {
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = `${SDK_BASE}?appkey=${encodeURIComponent(appKey)}&autoload=false`;
-    script.async = true;
-    script.onload = () => {
+    const onScriptLoaded = () => {
       const kakao = getKakaoGlobal();
       if (!kakao) {
         reject(new Error('Kakao SDK 로드 후 전역(kakao) 부재'));
@@ -163,11 +170,40 @@ export function loadKakaoSdk(appKey: string): Promise<KakaoMapsNamespace> {
       }
       kakao.maps.load(() => resolve(kakao));
     };
-    script.onerror = () => {
-      sdkPromise = null;
-      reject(new Error('Kakao SDK 스크립트 로드 실패'));
+
+    const inject = () => {
+      const script = document.createElement('script');
+      script.src = kakaoSdkUrl(appKey);
+      script.async = true;
+      script.onload = onScriptLoaded;
+      script.onerror = () => {
+        sdkPromise = null;
+        reject(new Error('Kakao SDK 스크립트 로드 실패'));
+      };
+      document.head.appendChild(script);
     };
-    document.head.appendChild(script);
+
+    // +html.tsx 선로드 태그가 있으면 재사용: 이미 로드됐으면 즉시, 아니면 load 대기.
+    // 에러·타임아웃이면 직접 주입(중복 호출은 settled 가드).
+    const early = document.getElementById(KAKAO_SDK_TAG_ID);
+    if (!early) {
+      inject();
+      return;
+    }
+    if (getKakaoGlobal()) {
+      onScriptLoaded();
+      return;
+    }
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+    const timer = setTimeout(() => settle(inject), EARLY_TAG_TIMEOUT_MS);
+    early.addEventListener('load', () => settle(onScriptLoaded));
+    early.addEventListener('error', () => settle(inject));
   });
 
   return sdkPromise;

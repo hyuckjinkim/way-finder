@@ -1,0 +1,5 @@
+# Cloudflare Pages — 해시된 정적 산출물은 영구 캐시. HTML·manifest·icons는 기본값(재검증).
+/_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
