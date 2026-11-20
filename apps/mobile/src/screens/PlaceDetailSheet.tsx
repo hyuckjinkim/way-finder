@@ -21,6 +21,9 @@ import { GoogleTab } from '../components/GoogleTab.js';
 import { NaverTab } from '../components/NaverTab.js';
 import { KakaoTab } from '../components/KakaoTab.js';
 import { canCopyText, copyText, telUrl } from '../search/placeActions.js';
+import { Toast } from '../components/Toast.js';
+import { favoriteStore, isFavorite, toggleFavorite, useFavorites } from '../favorites/favorites.js';
+import { buildPlaceShare, canShare, sharePlace } from '../share/share.js';
 import type { GoogleLoadState, PlatformTabId } from '../components/platformTabs.js';
 import {
   defaultActiveTab,
@@ -67,6 +70,10 @@ export function PlaceDetailSheet({
   const [googleState, setGoogleState] = useState<GoogleLoadState>('idle');
   const [googleData, setGoogleData] = useState<GoogleData>({ reviews: [] });
   const [copied, setCopied] = useState<boolean | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
+  const favorites = useFavorites();
+  const saved = isFavorite(favorites, detail.id);
   const phoneUrl = detail.phone ? telUrl(detail.phone) : undefined;
 
   // 구글 데이터 lazy 로드: 구글 탭이 활성이고 아직 idle일 때만 1회 요청.
@@ -112,106 +119,132 @@ export function PlaceDetailSheet({
     });
   };
 
+  const toggleSaved = (): void => favoriteStore.save(toggleFavorite(favorites, detail));
+
+  // 앞에 await 없이 바로 호출 — navigator.share는 사용자 제스처 안에서만 열린다.
+  const share = (): void => {
+    void sharePlace(buildPlaceShare(detail, window.location.origin)).then((r) => {
+      if (r === 'copied') setToast('링크를 복사했어요');
+      else if (r === 'failed') setToast('링크를 복사하지 못했어요');
+    });
+  };
+
   return (
-    <ScrollView style={styles.sheet} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.name}>{detail.name}</Text>
-          <Text style={styles.meta}>
-            {detail.category} · {detail.address}
-          </Text>
-          {detail.phone ? (
+    <>
+      <ScrollView style={styles.sheet} contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <View style={styles.headerText}>
+            <Text style={styles.name}>{detail.name}</Text>
+            <Text style={styles.meta}>
+              {detail.category} · {detail.address}
+            </Text>
+            {detail.phone ? (
+              <Pressable
+                onPress={callPhone}
+                accessibilityRole="link"
+                accessibilityLabel={`전화 걸기 ${detail.phone}`}
+                style={styles.phoneRow}
+              >
+                <Text style={styles.phone}>{detail.phone}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {onClose ? (
             <Pressable
-              onPress={callPhone}
-              accessibilityRole="link"
-              accessibilityLabel={`전화 걸기 ${detail.phone}`}
-              style={styles.phoneRow}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="닫기"
+              style={styles.close}
             >
-              <Text style={styles.phone}>{detail.phone}</Text>
+              <Text style={styles.closeText}>✕</Text>
             </Pressable>
           ) : null}
         </View>
-        {onClose ? (
+
+        <View style={styles.routeRow}>
           <Pressable
-            onPress={onClose}
+            style={[styles.routeBtn, styles.routeBtnOutline]}
+            onPress={() => onSetOrigin?.(detail)}
             accessibilityRole="button"
-            accessibilityLabel="닫기"
-            style={styles.close}
+            accessibilityLabel="출발지로 설정"
           >
-            <Text style={styles.closeText}>✕</Text>
+            <Text style={styles.routeBtnOutlineText}>출발</Text>
           </Pressable>
-        ) : null}
-      </View>
+          <Pressable
+            style={[styles.routeBtn, styles.routeBtnFilled]}
+            onPress={() => onSetDestination?.(detail)}
+            accessibilityRole="button"
+            accessibilityLabel="도착지로 설정"
+          >
+            <Text style={styles.routeBtnFilledText}>도착</Text>
+          </Pressable>
+        </View>
 
-      <View style={styles.routeRow}>
-        <Pressable
-          style={[styles.routeBtn, styles.routeBtnOutline]}
-          onPress={() => onSetOrigin?.(detail)}
-          accessibilityRole="button"
-          accessibilityLabel="출발지로 설정"
-        >
-          <Text style={styles.routeBtnOutlineText}>출발</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.routeBtn, styles.routeBtnFilled]}
-          onPress={() => onSetDestination?.(detail)}
-          accessibilityRole="button"
-          accessibilityLabel="도착지로 설정"
-        >
-          <Text style={styles.routeBtnFilledText}>도착</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.chipRow}>
-        {canCopyText() ? (
+        <View style={styles.chipRow}>
+          <Pressable
+            style={[styles.chip, saved && styles.chipOn]}
+            onPress={toggleSaved}
+            accessibilityRole="button"
+            accessibilityLabel={saved ? '저장됨, 저장 해제' : '장소 저장'}
+          >
+            <Text style={[styles.chipText, saved && styles.chipTextOn]}>{saved ? '★ 저장됨' : '☆ 저장'}</Text>
+          </Pressable>
+          {canShare() ? (
+            <Pressable style={styles.chip} onPress={share} accessibilityRole="button" accessibilityLabel="장소 공유">
+              <Text style={styles.chipText}>공유</Text>
+            </Pressable>
+          ) : null}
+          {canCopyText() ? (
+            <Pressable
+              style={styles.chip}
+              onPress={copyAddress}
+              accessibilityRole="button"
+              accessibilityLabel="주소 복사"
+            >
+              <Text style={styles.chipText}>
+                {copied === null ? '주소 복사' : copied ? '복사했어요' : '복사하지 못했어요'}
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
             style={styles.chip}
-            onPress={copyAddress}
+            onPress={() => onOpenRoadview?.(detail)}
             accessibilityRole="button"
-            accessibilityLabel="주소 복사"
+            accessibilityLabel={detail.roadview ? '로드뷰 보기' : '스트리트뷰 보기'}
           >
-            <Text style={styles.chipText}>
-              {copied === null ? '주소 복사' : copied ? '복사했어요' : '복사하지 못했어요'}
-            </Text>
+            <Text style={styles.chipText}>{detail.roadview ? '로드뷰 보기' : '스트리트뷰 보기'}</Text>
           </Pressable>
-        ) : null}
-        <Pressable
-          style={styles.chip}
-          onPress={() => onOpenRoadview?.(detail)}
-          accessibilityRole="button"
-          accessibilityLabel={detail.roadview ? '로드뷰 보기' : '스트리트뷰 보기'}
-        >
-          <Text style={styles.chipText}>{detail.roadview ? '로드뷰 보기' : '스트리트뷰 보기'}</Text>
-        </Pressable>
-      </View>
+        </View>
 
-      <SegmentedTabs tabs={tabs} active={active} onChange={setActive} />
+        <SegmentedTabs tabs={tabs} active={active} onChange={setActive} />
 
-      <View style={styles.body}>
-        {active === 'naver' ? (
-          <NaverTab
-            posts={detail.blogs.naver}
-            moreUrl={detail.links.naverPlace}
-            onOpenLink={onOpenLink}
-          />
-        ) : null}
-        {active === 'kakao' ? (
-          <KakaoTab
-            posts={detail.blogs.kakao}
-            moreUrl={detail.links.kakaoMap}
-            onOpenLink={onOpenLink}
-          />
-        ) : null}
-        {active === 'google' ? (
-          <GoogleTab
-            state={googleState}
-            rating={googleData.rating}
-            reviews={googleData.reviews}
-            onRequestLoad={requestGoogle}
-          />
-        ) : null}
-      </View>
-    </ScrollView>
+        <View style={styles.body}>
+          {active === 'naver' ? (
+            <NaverTab
+              posts={detail.blogs.naver}
+              moreUrl={detail.links.naverPlace}
+              onOpenLink={onOpenLink}
+            />
+          ) : null}
+          {active === 'kakao' ? (
+            <KakaoTab
+              posts={detail.blogs.kakao}
+              moreUrl={detail.links.kakaoMap}
+              onOpenLink={onOpenLink}
+            />
+          ) : null}
+          {active === 'google' ? (
+            <GoogleTab
+              state={googleState}
+              rating={googleData.rating}
+              reviews={googleData.reviews}
+              onRequestLoad={requestGoogle}
+            />
+          ) : null}
+        </View>
+      </ScrollView>
+      {toast ? <Toast message={toast} onDismiss={dismissToast} /> : null}
+    </>
   );
 }
 
@@ -242,5 +275,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   chipText: { fontSize: 14, fontWeight: '600', color: '#374151' },
+  chipOn: { backgroundColor: '#e8f0fe' },
+  chipTextOn: { color: '#1a56db' },
   body: { marginTop: 8 },
 });

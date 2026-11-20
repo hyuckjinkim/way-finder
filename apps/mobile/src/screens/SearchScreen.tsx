@@ -1,7 +1,8 @@
 /**
  * SearchScreen — 검색 화면 (C2).
  *
- * 입력 전엔 최근 검색(최대 10, 개별 삭제), 입력하면 자동완성 리스트.
+ * 입력 전엔 저장한 장소(F1, ✕로 삭제) 위에 최근 검색(최대 10, 개별 삭제), 입력하면 자동완성 리스트.
+ * ponytail: 저장한 장소는 ✕로만 지운다 — 스와이프 삭제는 제스처 라이브러리 없이 웹·네이티브 둘 다 하려면 비싸다.
  * 결과 행: `업종 · 거리 · 주소`, 일치한 글자는 굵게. 검색은 PlaceProvider.search(query, near)에
  * 위임한다(near = 지도 중심/GPS, 기본은 mockPlaceProvider).
  *
@@ -24,6 +25,7 @@ import { cameraForPlace } from './searchCamera.js';
 import { usePlaceSearch } from '../state/placeSearch.js';
 import { placeSubtitle, splitMatch } from '../search/format.js';
 import { pushRecent, recentStore, removeRecent } from '../search/recentSearches.js';
+import { favoriteStore, removeFavorite, useFavorites, type SavedPlace } from '../favorites/favorites.js';
 
 export const SEARCH_PLACEHOLDER = '장소·주소 검색';
 // 결과·최근 검색 행 공통 표식(웹 data-testid) — 방향키 이동 대상.
@@ -68,6 +70,7 @@ export function SearchScreen({
 }: SearchScreenProps): React.ReactElement {
   const [query, setQuery] = useState('');
   const [recents, setRecents] = useState<string[]>(() => recentStore.load());
+  const favorites = useFavorites();
   const { results, status, setQuery: runSearch } = usePlaceSearch(provider, near);
   const rootRef = useRef<View>(null);
   const inputRef = useRef<TextInput>(null);
@@ -101,6 +104,12 @@ export function SearchScreen({
       return next;
     });
   }, []);
+
+  // 저장한 장소는 검색어 없이 바로 연다 — 검색 결과와 같은 경로(placeHref 힌트 포함).
+  const openSaved = useCallback(
+    (place: SavedPlace) => onSelectPlace?.(place, cameraForPlace(place)),
+    [onSelectPlace],
+  );
 
   const showRecents = query.trim().length === 0;
 
@@ -154,8 +163,43 @@ export function SearchScreen({
           data={recents}
           keyExtractor={(q) => q}
           keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={recents.length > 0 ? <Text style={styles.sectionTitle}>최근 검색</Text> : null}
-          ListEmptyComponent={<Text style={styles.empty}>최근 검색 기록이 없어요.</Text>}
+          ListHeaderComponent={
+            <>
+              {favorites.length > 0 ? <Text style={styles.sectionTitle}>저장한 장소</Text> : null}
+              {favorites.map((p) => (
+                <View key={p.id} style={styles.recentRow}>
+                  <Pressable
+                    testID={ROW_ID}
+                    style={styles.recentMain}
+                    onPress={() => openSaved(p)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`저장한 장소 ${p.name}`}
+                  >
+                    <Text style={styles.recentText} numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                    {p.address ? (
+                      <Text style={styles.sub} numberOfLines={1}>
+                        {p.address}
+                      </Text>
+                    ) : null}
+                  </Pressable>
+                  <Pressable
+                    style={styles.recentDelete}
+                    onPress={() => favoriteStore.save(removeFavorite(favorites, p.id))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`저장한 장소 ${p.name} 삭제`}
+                  >
+                    <Text style={styles.recentDeleteText}>✕</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {recents.length > 0 ? <Text style={styles.sectionTitle}>최근 검색</Text> : null}
+            </>
+          }
+          ListEmptyComponent={
+            favorites.length === 0 ? <Text style={styles.empty}>최근 검색 기록이 없어요.</Text> : null
+          }
           renderItem={({ item }) => (
             <View style={styles.recentRow}>
               <Pressable

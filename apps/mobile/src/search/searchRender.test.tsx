@@ -11,3 +11,10 @@ describe('SearchScreen 렌더 (SSR)', () => {
     expect(html).toContain('최근 검색 기록이 없어요.');
   });
 });
+
+describe('SearchScreen 저장한 장소 (SSR)', () => {
+  it('SSR은 저장 목록 없이 굽는다(하이드레이션 후 채움) — 저장 섹션 제목 없음', () => {
+    const html = renderToStaticMarkup(<SearchScreen onCancel={() => {}} />);
+    expect(html).not.toContain('저장한 장소');
+  });
+});
