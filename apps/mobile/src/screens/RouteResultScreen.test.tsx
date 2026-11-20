@@ -11,7 +11,7 @@
  * C3(P4): customMeta 표시 단언 — 선호 프로필 라벨 + 예산 내/초과 플래그.
  * customMeta 미존재(기존 P2 경로) 시 미표시 하위호환 단언 포함.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
@@ -24,6 +24,12 @@ import {
 import { RouteResultScreen } from './RouteResultScreen.js';
 import { ApiError } from '../services/apiClient.js';
 import { TransitError } from '@wayfinder/shared/transit';
+
+// OverlayPanel은 마운트 후에만 그린다(SSR 하이드레이션) — 정적 렌더 테스트에선 내용만 통과시킨다.
+vi.mock('../components/OverlayPanel', async (orig) => ({
+  ...(await orig<typeof import('../components/OverlayPanel')>()),
+  OverlayPanel: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 const render = (el: React.ReactElement): string => renderToStaticMarkup(el);
 
@@ -267,5 +273,39 @@ describe('RouteResultScreen — 카드 접근성 라벨', () => {
   it('소요·도착·요금·환승 포함', () => {
     const html = render(<RouteResultScreen route={{ ...TRANSIT_CHAIN, fare: 1650 }} />);
     expect(html).toMatch(/aria-label="경로 1, [^"]*분, \d\d:\d\d 도착, 요금 1,650원, 환승 1회"/);
+  });
+});
+
+describe('RouteResultScreen — B1 결과 화면 정리', () => {
+  const A = { lat: 37.485, lng: 126.901 };
+  const B = { lat: 37.498, lng: 127.028 };
+
+  it('뒤로 가기는 한국어 라벨만(영어 "back" 없음)', () => {
+    const html = render(<RouteResultScreen route={WALK_SIMPLE} onBack={() => {}} />);
+    expect(html).toContain('aria-label="뒤로 가기"');
+    expect(html).not.toMatch(/aria-label="[^"]*back/i);
+  });
+
+  it('출발=도착이면 결과 대신 안내 문구(경로 카드 없음)', () => {
+    const html = render(<RouteResultScreen route={WALK_SIMPLE} stops={[A, { lat: A.lat + 0.0001, lng: A.lng }]} />);
+    expect(html).toContain('출발지와 도착지가 같아요');
+    expect(html).not.toContain('경로 1,');
+  });
+
+  it('경유지가 있는 왕복(A→W→A)은 정상 결과', () => {
+    const html = render(<RouteResultScreen route={WALK_SIMPLE} stops={[A, B, A]} />);
+    expect(html).not.toContain('출발지와 도착지가 같아요');
+    expect(html).toContain('경로 1,');
+  });
+
+  it('3시간 넘는 도보는 대중교통 권유 문구', () => {
+    const long = { ...WALK_SIMPLE, totalDurationSec: 97 * 3600, legs: WALK_SIMPLE.legs.map((l) => ({ ...l, durationSec: 97 * 3600 })) };
+    expect(render(<RouteResultScreen route={long} />)).toContain('대중교통을 이용해 보세요');
+    expect(render(<RouteResultScreen route={WALK_SIMPLE} />)).not.toContain('대중교통을 이용해 보세요');
+  });
+
+  it('quota + URL 이름 없음 → stops 좌표로 카카오맵 링크 폴백', () => {
+    const html = render(<RouteResultScreen route={null} error={new TransitError('quota')} stops={[A, B]} mode="transit" />);
+    expect(html).toContain('카카오맵에서 보기');
   });
 });

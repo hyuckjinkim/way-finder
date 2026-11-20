@@ -58,11 +58,13 @@ export function routeQueryOptions(
     enabled: stops.length >= 2,
     staleTime: 5 * 60_000, // 5분 — 같은 탐색 재방문에 쿼터를 다시 쓰지 않게
     refetchOnWindowFocus: false,
-    // 미지원(501)·분류된 공급자 오류(quota·no_route·too_close·auth)는 재시도 무의미 — 즉시 안내.
-    // 그 외(네트워크·upstream)는 1회만: 시도마다 ODsay(30건/일)·카카오 쿼터를 쓰므로 재시도가 곱하지 않게.
+    // 미지원(501)·코드가 붙은 공급자 오류는 재시도 안 함 — upstream도 프록시가 카카오 쿼터를 이미
+    // 예약한 뒤라 재시도하면 다시 예약된다(ODsay 직접 실패는 RouteService가 이미 프록시로 넘겼다).
+    // 코드 없는 네트워크 오류만 1회. 쿼터와 무관한 도보·자동차는 upstream도 1회 재시도.
     retry: (failureCount, err) => {
+      if (isModeUnavailable(err)) return false;
       const code = transitErrorCode(err);
-      if (isModeUnavailable(err) || (code && code !== 'upstream')) return false;
+      if (code && (mode === 'transit' || code !== 'upstream')) return false;
       return failureCount < 1;
     },
   };

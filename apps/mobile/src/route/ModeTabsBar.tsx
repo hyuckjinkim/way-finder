@@ -32,6 +32,8 @@ export function ModeTabs({ active, onChange, modes = MODE_TAB_ORDER }: ModeTabsP
             onPress={() => onChange(tab)}
             accessibilityRole="tab"
             accessibilityState={{ selected: isActive }}
+            // RN-web 0.21은 accessibilityState를 aria-*로 옮기지 않는다 → 웹 스크린리더·getByRole selected용.
+            aria-selected={isActive}
             accessibilityLabel={MODE_TAB_LABELS[tab]}
           >
             <Text style={[styles.label, isActive && styles.labelActive]}>
@@ -63,6 +65,6 @@ const styles = StyleSheet.create({
   segmentActive: {
     backgroundColor: '#fff',
   },
-  label: { fontSize: 14, color: '#777' },
+  label: { fontSize: 14, color: '#555' }, // #f0f0f0 위 4.5:1 이상
   labelActive: { color: '#1a1a1a', fontWeight: '600' },
 });

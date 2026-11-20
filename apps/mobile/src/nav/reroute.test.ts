@@ -191,3 +191,28 @@ describe('createRerouteController — 엣지 재진입', () => {
     expect(getRoute).not.toHaveBeenCalled(); // dispose로 미발사
   });
 });
+
+describe('createRerouteController — 경유지 보존', () => {
+  const W1: LatLng = { lat: 37.568, lng: 126.98 };
+  const W2: LatLng = { lat: 37.569, lng: 126.985 };
+  const req: RouteRequest = { stops: [{ lat: 37.5664, lng: 126.9779 }, W1, W2, DEST], mode: 'walk' };
+
+  it('재탐색 stops = [현재, …안 지난 경유지, 목적지]', async () => {
+    const getRoute = vi.fn().mockResolvedValue(NEW_ROUTE);
+    const ctrl = createRerouteController(getRoute, DEST, req, { onSuccess: vi.fn(), onFailed: vi.fn() });
+    ctrl.onSample(false, coord(0));
+    ctrl.onSample(true, coord(1));
+    await vi.advanceTimersByTimeAsync(REROUTE_DEBOUNCE_MS);
+    expect(getRoute.mock.calls[0]![0].stops).toEqual([coord(1), W1, W2, DEST]);
+  });
+
+  it('경유지 근처(40 m 이내)를 지나면 그 경유지는 빼고 재탐색', async () => {
+    const getRoute = vi.fn().mockResolvedValue(NEW_ROUTE);
+    const ctrl = createRerouteController(getRoute, DEST, req, { onSuccess: vi.fn(), onFailed: vi.fn() });
+    ctrl.onSample(false, { lat: W1.lat + 0.0001, lng: W1.lng }); // W1 약 11 m — 지남
+    const off = { lat: 37.5685, lng: 126.982 };
+    ctrl.onSample(true, off);
+    await vi.advanceTimersByTimeAsync(REROUTE_DEBOUNCE_MS);
+    expect(getRoute.mock.calls[0]![0].stops).toEqual([off, W2, DEST]);
+  });
+});

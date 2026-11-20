@@ -28,6 +28,7 @@ import { mockPlaceProvider } from '@wayfinder/shared/mocks';
 import type { ModeTabId } from '../route/modeTabs.js';
 import { DEFAULT_MODE_TAB, tabToMode } from '../route/modeTabs.js';
 import { usePlaceSearch } from '../state/placeSearch.js';
+import { placeSubtitle } from '../search/format.js';
 import { ModeTabs } from '../route/ModeTabsBar.js';
 import { availableModes } from '../route/capabilities.js';
 import { loadLastMode, saveLastMode } from '../route/lastMode.js';
@@ -123,14 +124,17 @@ export function RouteInputScreen({
     onModeChange?.(mode);
   }, [mode, onModeChange]);
 
+  // A→W1→W2→B ⇄ B→W2→W1→A — 경유지 순서도 뒤집는다.
   const swapStops = useCallback(() => {
     setOrigin(destination);
     setDestination(origin);
+    setWaypoints((prev) => [...prev].reverse());
   }, [origin, destination]);
 
   const [focusedField, setFocusedField] = useState<FocusedField>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const { results: searchResults, setQuery: runSearch } = usePlaceSearch(provider);
+  // 출발지(보통 내 위치) 기준 거리 — 메인 검색 행과 같은 `업종 · 거리 · 주소`.
+  const { results: searchResults, status: searchStatus, setQuery: runSearch } = usePlaceSearch(provider, origin?.coord);
 
   const handleFocus = useCallback((field: FocusedField) => {
     setFocusedField(field);
@@ -352,9 +356,7 @@ export function RouteInputScreen({
             keyExtractor={(item) => item.id}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
-              searchQuery.trim().length > 0 ? (
-                <Text style={styles.empty}>검색 결과가 없어요.</Text>
-              ) : null
+              searchStatus === 'idle' ? null : <Text style={styles.empty}>{EMPTY_TEXT[searchStatus]}</Text>
             }
             renderItem={({ item }) => (
               <Pressable
@@ -363,9 +365,9 @@ export function RouteInputScreen({
                 accessibilityRole="button"
                 accessibilityLabel={item.name}
               >
-                <Text style={styles.resultName}>{item.name}</Text>
-                <Text style={styles.resultSub}>
-                  {item.category} · {item.address}
+                <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.resultSub} numberOfLines={1}>
+                  {placeSubtitle(item)}
                 </Text>
               </Pressable>
             )}
@@ -400,6 +402,13 @@ export function RouteInputScreen({
   );
 }
 
+// ponytail: SearchScreen의 EMPTY_TEXT와 같은 문구(그 파일은 비공개 상수) — 바뀌면 함께.
+const EMPTY_TEXT = {
+  loading: '검색 중…',
+  done: '검색 결과가 없어요.',
+  error: '검색에 실패했어요. 잠시 후 다시 시도해 주세요.',
+} as const;
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#fff' },
   stopsScroll: { flex: 1 },
@@ -426,7 +435,7 @@ const styles = StyleSheet.create({
   dotWaypoint: { backgroundColor: '#888' },
   dotDestination: { backgroundColor: '#e53935' },
   stopLabel: { fontSize: 15, color: '#111' },
-  stopPlaceholder: { fontSize: 15, color: '#aaa' },
+  stopPlaceholder: { fontSize: 15, color: '#6b7280' },
   waypointRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -491,7 +500,7 @@ const styles = StyleSheet.create({
   },
   cancelBtn: { paddingLeft: 12, minHeight: 44, justifyContent: 'center' },
   cancelText: { fontSize: 15, color: '#1a73e8' },
-  empty: { padding: 24, textAlign: 'center', color: '#999', fontSize: 14 },
+  empty: { padding: 24, textAlign: 'center', color: '#6b7280', fontSize: 14 },
   resultRow: {
     paddingHorizontal: 16,
     paddingVertical: 12,

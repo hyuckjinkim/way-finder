@@ -2,7 +2,8 @@
  * 경로 입력 라우트 — /route/input (E2 + P4 D1).
  *
  * C2 RouteInputScreen에 어댑터로 배선(화면 시그니처 불변, 어댑터는 라우트 파일).
- * onSubmit(RouteRequest) → D2 routeStore에 stops·mode·preference·maxExtraMinutes 기록 후 /route/result로 이동.
+ * onSubmit(RouteRequest) → D2 routeStore에 stops·mode·preference·maxExtraMinutes 기록 후 /route/result로 이동
+ * (선호·예산은 URL pref·max에도 싣는다).
  * provider = PlaceService(실 프록시, 데모 모드면 내부에서 mock) — 화면 기본값(mock)을 쓰면 배포본이 항상 mock.
  *
  * P4 D1: RouteOptionsBar 슬롯 배선. B 스트림 완료 전 placeholder stub 사용.
@@ -49,16 +50,18 @@ export default function RouteInputRoute() {
   const onSubmit = useCallback(
     (req: RouteRequest, urlState: RouteUrlState) => {
       // 도보 선호는 도보 + 서버 지원일 때만 유효 — 그 외엔 이전에 고른 값이 새어 나가지 않게 비운다.
-      if (!showWalkPreferences(capabilities, req.mode)) {
+      const keepPrefs = showWalkPreferences(capabilities, req.mode);
+      if (!keepPrefs) {
         setPreference(undefined);
         setMaxExtraMinutes(undefined);
       }
       setStops(req.stops);
       setMode(req.mode);
-      // 새로고침·공유 링크에서도 복원되도록 입력을 URL에 싣는다.
-      router.push(`/route/result${routeQuery(urlState)}` as Href);
+      // 새로고침·공유 링크에서도 복원되도록 입력(선호·예산 포함, 비운 뒤 값)을 URL에 싣는다.
+      const prefs = keepPrefs ? { preference, maxExtraMinutes } : {};
+      router.push(`/route/result${routeQuery({ ...urlState, ...prefs })}` as Href);
     },
-    [router, setStops, setMode, setPreference, setMaxExtraMinutes, capabilities],
+    [router, setStops, setMode, setPreference, setMaxExtraMinutes, capabilities, preference, maxExtraMinutes],
   );
 
   const onCancel = useCallback(() => router.back(), [router]);

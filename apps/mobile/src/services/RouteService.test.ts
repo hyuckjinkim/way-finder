@@ -331,6 +331,26 @@ describe('RouteService — 웹 국내 대중교통 ODsay 직접 호출', () => {
     vi.unstubAllGlobals();
   });
 
+  it('시외 + ODsay quota → 프록시 no_route를 quota로 (카카오맵 링크 안내), quota 없으면 no_route 유지', async () => {
+    const INTERCITY: RouteRequest = { stops: [SEOUL_A, { lat: 35.1151, lng: 129.0414 }], mode: 'transit' };
+    const noRoute = () => Object.assign(new Error('API error 422'), { status: 422, code: 'no_route' });
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const plain = await load(undefined);
+    plain.apiPost.mockRejectedValueOnce(noRoute());
+    await expect(plain.getRoute(INTERCITY)).rejects.toMatchObject({ name: 'TransitError', code: 'no_route' });
+
+    vi.stubGlobal('fetch', odsayError([{ code: '429', message: 'Daily quota exceeded' }]));
+    const quota = await load('uri-key');
+    quota.apiPost.mockRejectedValue(noRoute());
+    await expect(quota.getRoute(INTERCITY)).rejects.toMatchObject({ name: 'TransitError', code: 'quota' });
+    // 이후(ODsay 건너뜀)에도 같은 안내
+    await expect(quota.getRoute(INTERCITY)).rejects.toMatchObject({ name: 'TransitError', code: 'quota' });
+    // 시내 no_route는 그대로
+    await expect(quota.getRoute(TRANSIT_KR)).rejects.toMatchObject({ name: 'TransitError', code: 'no_route' });
+    vi.unstubAllGlobals();
+  });
+
   it('프록시 오류 본문 code → TransitError, 그 외(501 등)는 원래 오류 유지', async () => {
     const { apiPost, getRoute } = await load(undefined);
     (apiPost as Mock).mockRejectedValueOnce(Object.assign(new Error('API error 429'), { status: 429, code: 'quota' }));

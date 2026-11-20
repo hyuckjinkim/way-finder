@@ -12,6 +12,10 @@
 import type { MapPolyline } from '@wayfinder/shared';
 import type { Route, RouteLeg, TravelMode, TransitMeta } from '@wayfinder/shared';
 import type { BBox, LatLng } from '@wayfinder/shared';
+import { haversineDistanceM } from '@wayfinder/shared';
+
+/** 입력 지점과 경로 끝이 이보다 멀면 "같은 곳"이 아니다 — 도보 연결선·마커 판단 기준(m). */
+export const STOP_GAP_M = 30;
 
 // ─── 모드별 기본 색상 ──────────────────────────────────────────────────────────
 
@@ -40,9 +44,11 @@ function colorForLeg(leg: RouteLeg): string {
   return MODE_COLOR[leg.mode];
 }
 
+const WALK_WIDTH = 4;
+
 /** 모드별 선 두께. */
 function widthForLeg(leg: RouteLeg): number {
-  return leg.mode === 'walk' ? 4 : leg.mode === 'transit' ? 6 : 5;
+  return leg.mode === 'walk' ? WALK_WIDTH : leg.mode === 'transit' ? 6 : 5;
 }
 
 /**
@@ -54,23 +60,43 @@ function widthForLeg(leg: RouteLeg): number {
  * MapPolyline 적합성: 다구간·대중교통 라인별 색상이
  * `{ id, coords, color?, width? }` 인터페이스로 완전히 표현된다.
  */
-export function routeToPolylines(route: Route): MapPolyline[] {
-  return route.legs.map((leg, index) => ({
+export function routeToPolylines(route: Route, stops?: LatLng[]): MapPolyline[] {
+  const lines: MapPolyline[] = route.legs.map((leg, index) => ({
     id: `leg-${index}`,
     coords: leg.coords,
     color: colorForLeg(leg),
     width: widthForLeg(leg),
     ...(leg.mode === 'walk' ? { dashed: true } : {}),
   }));
+  // 카카오 대중교통은 첫/끝 도보를 주지 않는다 → 입력 출발지→첫 승차, 마지막 하차→도착지를 점선으로 잇는다.
+  // stops 없이 부르면(구간 바 색 계산) leg 인덱스와 1:1을 유지한다.
+  const first = route.legs[0];
+  const last = route.legs[route.legs.length - 1];
+  const origin = stops?.[0];
+  const dest = stops?.[stops.length - 1];
+  const connector = (id: string, a: LatLng, b: LatLng): MapPolyline => ({
+    id,
+    coords: [a, b],
+    color: MODE_COLOR.walk,
+    width: WALK_WIDTH,
+    dashed: true,
+  });
+  if (first?.mode === 'transit' && origin && haversineDistanceM(origin, first.start) > STOP_GAP_M) {
+    lines.unshift(connector('walk-origin', origin, first.start));
+  }
+  if (last?.mode === 'transit' && dest && haversineDistanceM(last.end, dest) > STOP_GAP_M) {
+    lines.push(connector('walk-destination', last.end, dest));
+  }
+  return lines;
 }
 
 /**
  * 전체 경로의 BBox (fitBounds용).
- * 모든 leg의 coords를 순회해 남서/북동 경계를 계산한다.
+ * 모든 leg의 coords(+ extra: 입력 출발·도착 등)를 순회해 남서/북동 경계를 계산한다.
  * coords가 비어 있는 leg는 건너뛴다.
  */
-export function boundsForRoute(legs: Route['legs']): BBox | null {
-  const allCoords: LatLng[] = legs.flatMap((leg) => leg.coords);
+export function boundsForRoute(legs: Route['legs'], extra: LatLng[] = []): BBox | null {
+  const allCoords: LatLng[] = [...legs.flatMap((leg) => leg.coords), ...extra];
   if (allCoords.length === 0) return null;
 
   let minLat = allCoords[0]!.lat;

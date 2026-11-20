@@ -14,7 +14,7 @@ import type { Route, RouteRequest } from '@wayfinder/shared';
 import { routesPath } from '@wayfinder/shared/api';
 import { mockRouteProvider } from '@wayfinder/shared/mocks';
 import { routeRegion } from '@wayfinder/shared/region';
-import { isTransitErrorCode, koreaTransitRoute, TransitError, transitErrorCode } from '@wayfinder/shared/transit';
+import { isIntercity, isTransitErrorCode, koreaTransitRoute, TransitError, transitErrorCode } from '@wayfinder/shared/transit';
 import { ApiError, apiPost, isDemoMode } from './apiClient.js';
 
 /**
@@ -33,6 +33,8 @@ const isBrowser = (): boolean => typeof document !== 'undefined';
  * ponytail: 세션(페이지 수명) 단위 — 새로고침하면 다시 시도. KST 자정 리셋 추적은 필요해지면 추가.
  */
 let skipOdsayDirect = false;
+/** ODsay가 쿼터로 막혔는지 — 시외 대중교통은 ODsay만 하므로 프록시 no_route를 quota로 바꿔 안내한다. */
+let odsayQuotaHit = false;
 
 /** 프록시 501 MODE_UNAVAILABLE — 이 지역·이동수단의 공급자 키가 없어 지원하지 않음(재시도 무의미). */
 export function isModeUnavailable(err: unknown): boolean {
@@ -66,6 +68,7 @@ export async function getRoute(req: RouteRequest): Promise<Route> {
       if (code === 'no_route' || code === 'too_close') throw err;
       // 쿼터 소진·미등록 도메인(예: localhost 인증 실패)은 이번 세션 내내 같다 → 이후엔 바로 프록시.
       if (code === 'quota' || code === 'auth') skipOdsayDirect = true;
+      if (code === 'quota') odsayQuotaHit = true;
       console.warn('[route] ODsay direct failed, falling back to proxy:', err);
     }
   }
@@ -73,6 +76,10 @@ export async function getRoute(req: RouteRequest): Promise<Route> {
     return (await apiPost(routesPath, req)) as Route;
   } catch (err) {
     const code = (err as { code?: unknown } | null)?.code;
+    // 프록시(카카오)는 시외를 안 한다 — ODsay가 쿼터로 빠진 시외 요청의 no_route는 실은 쿼터(카카오맵 링크 안내).
+    if (code === 'no_route' && odsayQuotaHit && req.mode === 'transit' && isIntercity(req.stops)) {
+      throw new TransitError('quota', 'intercity transit needs ODsay (quota reached)');
+    }
     throw isTransitErrorCode(code) ? new TransitError(code, (err as Error).message) : err;
   }
 }

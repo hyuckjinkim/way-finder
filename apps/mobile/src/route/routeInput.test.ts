@@ -12,6 +12,11 @@ describe('resolveRouteInput', () => {
     const url = parseRouteParams(Object.fromEntries(new URLSearchParams(routeQuery({ origin: A, destination: B, waypoints: [W], mode: 'walk' }))));
     expect(resolveRouteInput(url, store)).toEqual({ stops: [A.coord, W.coord, B.coord], mode: 'walk' });
   });
+  it('URL에 o·d가 있으면 pref·max도 URL 값(스토어의 이전 값이 새지 않음)', () => {
+    const r = resolveRouteInput({ origin: A, destination: B, preference: 'quiet', maxExtraMinutes: 10 }, { ...store, maxExtraMinutes: 20 });
+    expect(r).toMatchObject({ preference: 'quiet', maxExtraMinutes: 10 });
+    expect(resolveRouteInput({ origin: A, destination: B }, { ...store, preference: 'safe' })?.preference).toBeUndefined();
+  });
   it('URL mode 없으면 스토어 mode', () => {
     expect(resolveRouteInput({ origin: A, destination: B }, { ...store, mode: 'car' })?.mode).toBe('car');
   });

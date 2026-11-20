@@ -204,3 +204,34 @@ describe('routeSummary — 자전거', () => {
     expect(s.lineNames).toEqual([]);
   });
 });
+
+describe('routeToPolylines — 첫/끝 도보 연결선(카카오 대중교통)', () => {
+  const S = { lat: 37.4850, lng: 126.9010 };
+  const T1 = { lat: 37.4855, lng: 126.9015 }; // 첫 승차 — S에서 약 70 m
+  const T2 = { lat: 37.4979, lng: 127.0276 };
+  const D = { lat: 37.4990, lng: 127.0290 }; // 마지막 하차에서 약 170 m
+  const route = {
+    legs: [{ mode: 'transit' as const, start: T1, end: T2, coords: [T1, T2], distanceM: 1, durationSec: 60,
+      transit: { lineName: '2호선', lineType: 'subway' as const } }],
+    totalDurationSec: 60,
+    totalDistanceM: 1,
+  };
+
+  it('입력 지점과 30 m 넘게 떨어지면 점선 도보 연결선을 앞뒤에 추가', () => {
+    const lines = routeToPolylines(route, [S, D]);
+    expect(lines.map((l) => l.id)).toEqual(['walk-origin', 'leg-0', 'walk-destination']);
+    expect(lines[0]).toMatchObject({ coords: [S, T1], dashed: true });
+    expect(lines[2]).toMatchObject({ coords: [T2, D], dashed: true });
+  });
+
+  it('30 m 이내거나 stops가 없으면 연결선 없음(leg 인덱스 1:1 유지)', () => {
+    expect(routeToPolylines(route, [T1, T2]).map((l) => l.id)).toEqual(['leg-0']);
+    expect(routeToPolylines(route).map((l) => l.id)).toEqual(['leg-0']);
+  });
+
+  it('boundsForRoute: extra 지점까지 포함', () => {
+    const b = boundsForRoute(route.legs, [S, D])!;
+    expect(b.sw).toEqual({ lat: S.lat, lng: S.lng });
+    expect(b.ne).toEqual({ lat: D.lat, lng: D.lng });
+  });
+});

@@ -290,14 +290,21 @@ describe('routeQueryOptions — retry (501 미지원은 즉시 안내)', () => {
     expect(retry(1, new Error('network'))).toBe(false);
   });
 
-  it.each(['quota', 'no_route', 'too_close', 'auth'] as const)('TransitError %s는 재시도하지 않는다', (code) => {
-    expect(retry(0, new TransitError(code))).toBe(false);
+  // upstream 포함: 프록시가 이미 카카오 쿼터를 예약·소진한 뒤의 실패라 재시도하면 다시 예약된다.
+  it.each(['quota', 'no_route', 'too_close', 'auth', 'upstream'] as const)('대중교통 TransitError %s는 재시도하지 않는다', (code) => {
+    const transitRetry = routeQueryOptions([SEOUL_A, SEOUL_C], 'transit').retry as (n: number, e: Error) => boolean;
+    expect(transitRetry(0, new TransitError(code))).toBe(false);
   });
 
-  it('upstream·네트워크는 1회 재시도', () => {
-    expect(retry(0, new TransitError('upstream'))).toBe(true);
+  it('도보 upstream은 쿼터와 무관해 1회 재시도', () => {
+    const walkRetry = routeQueryOptions([SEOUL_A, SEOUL_C], 'walk').retry as (n: number, e: Error) => boolean;
+    expect(walkRetry(0, new TransitError('upstream'))).toBe(true);
+    expect(walkRetry(1, new TransitError('upstream'))).toBe(false);
+  });
+
+  it('코드 없는 네트워크 오류만 1회 재시도', () => {
     expect(retry(0, new TypeError('Failed to fetch'))).toBe(true);
-    expect(retry(1, new TransitError('upstream'))).toBe(false);
+    expect(retry(1, new TypeError('Failed to fetch'))).toBe(false);
   });
 
   it('staleTime 5분, 포커스 재조회 없음', () => {

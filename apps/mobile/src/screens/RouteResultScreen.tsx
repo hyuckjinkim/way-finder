@@ -2,7 +2,8 @@
  * D4 — RouteResultScreen.
  *
  * 경로 탐색 결과를 지도(폴리라인·마커·fitTo) + 결과 패널로 표시한다.
- * - 패널: 폰=하단 시트(내용 높이, 최대 55%, 스크롤) / 데스크톱(≥768)=좌측 카드.
+ * - 패널: 다른 화면과 같은 OverlayPanel — 폰=바텀시트(처음 60%, 드래그), 데스크톱(≥768)=내용 높이 플로팅 카드.
+ *   뒤로 가기는 패널 안 첫 줄(스택 헤더 없음).
  * - 대안 경로 목록(route + route.alternatives): 소요·도착 예정·요금·환승·도보 + 구간 바.
  *   선택한 경로의 단계 목록을 펼치고, 지도는 선택 경로로 다시 그린다.
  * - <MapView>는 src/map/MapView import만 (수정 금지, §8 D4 경계).
@@ -17,15 +18,18 @@ import {
   Platform,
   Linking,
   useWindowDimensions,
+  type ViewStyle,
 } from 'react-native';
-import type { Route, RoutePreference, TravelMode } from '@wayfinder/shared';
+import type { LatLng, Route, RoutePreference, TravelMode } from '@wayfinder/shared';
+import { routeRegion } from '@wayfinder/shared/region';
 import { transitErrorCode } from '@wayfinder/shared/transit';
 import MapView from '../map/MapView';
+import { OverlayPanel, panelPlacement } from '../components/OverlayPanel';
 import { routeToPolylines, boundsForRoute } from '../route/routeToPolylines.js';
 import { routeSummary } from '../route/routeSummary.js';
 import {
-  DESKTOP_MIN_WIDTH,
-  SIDE_CARD_WIDTH,
+  LONG_WALK_SEC,
+  RESULT_SHEET_SNAP,
   arrivalTime,
   canStartNav,
   fitInsets,
@@ -34,7 +38,9 @@ import {
   formatFare,
   formatMinutes,
   hasTransit,
+  isSameStop,
   kakaoMapLink,
+  linkStop,
   readableTextColor,
   routeMarkers,
   routeStepItems,
@@ -57,7 +63,7 @@ const PREFERENCE_LABEL: Record<RoutePreference, string> = {
 export interface RouteResultScreenProps {
   /** 표시할 경로. null이면 로딩/빈 상태 표시. */
   route: Route | null;
-  /** 뒤로 가기 콜백. 지정 시 지도 위 ← 버튼을 렌더(스택 헤더가 없는 화면용). */
+  /** 뒤로 가기 콜백. 지정 시 패널 첫 줄에 ← 버튼을 렌더. */
   onBack?: () => void;
   /** 안내 시작 콜백(P3). 네이티브 + route 있을 때만 "안내 시작" 버튼 렌더. */
   onStartNav?: () => void;
@@ -69,7 +75,9 @@ export interface RouteResultScreenProps {
   onRetry?: () => void;
   /** too_close(출·도착 700m 이내) 시 "도보로 보기" 버튼. */
   onSwitchToWalk?: () => void;
-  /** 쿼터 소진 시 "카카오맵에서 보기" 링크용 출발·도착·모드. */
+  /** 입력 지점 [출발, …경유, 도착] — 출·도 마커·도보 연결선·지역(도착 시각 시간대)·링크 폴백에 쓴다. */
+  stops?: LatLng[];
+  /** 쿼터 소진 시 "카카오맵에서 보기" 링크용 출발·도착·모드(없으면 stops 좌표로 폴백). */
   origin?: LinkStop;
   destination?: LinkStop;
   mode?: TravelMode;
@@ -165,18 +173,18 @@ export function RouteResultScreen({
   onSelectedRouteChange,
   onRetry,
   onSwitchToWalk,
+  stops,
   origin,
   destination,
   mode,
 }: RouteResultScreenProps): React.ReactElement {
   const win = useWindowDimensions();
-  // 웹 정적 렌더(SSR)는 폭을 모르므로 마운트 후 실제 폭으로 레이아웃을 정한다(OverlayPanel과 동일 이유).
+  // 웹 정적 렌더(SSR)는 폭을 모르므로 마운트 후 실제 폭으로 여백을 정한다(OverlayPanel과 동일 이유).
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const isDesktop = mounted && win.width >= DESKTOP_MIN_WIDTH;
+  const isDesktop = mounted && panelPlacement(win.width) === 'side';
 
   const [selected, setSelected] = useState(0);
-  const [panelHeight, setPanelHeight] = useState(0);
   // 도착 예정 시각이 화면을 오래 열어 둬도 맞도록 1분마다 갱신.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -187,187 +195,166 @@ export function RouteResultScreen({
   // 새 탐색 결과가 오면 첫 경로부터.
   useEffect(() => setSelected(0), [route]);
 
+  const firstStop = stops?.[0];
+  const lastStop = stops?.[stops.length - 1];
+  // 경유지 있는 왕복(A→W→A)은 정상 — 경유지 없이 출발=도착일 때만.
+  const sameStops = stops?.length === 2 && isSameStop(stops[0]!, stops[1]!);
+
   const routes = useMemo(() => (route ? [route, ...(route.alternatives ?? [])] : []), [route]);
-  const active = routes[selected] ?? route;
+  const active = sameStops ? null : (routes[selected] ?? route);
   const customMeta = active ? routeSummary(active).customMeta : undefined;
 
   useEffect(() => {
     if (active) onSelectedRouteChange?.(active);
   }, [active, onSelectedRouteChange]);
 
-  const polylines = useMemo(() => (active ? routeToPolylines(active) : []), [active]);
-  const markers = useMemo(() => (active ? routeMarkers(active) : []), [active]);
-  const bounds = useMemo(() => (active ? boundsForRoute(active.legs) : null), [active]);
-  const insets = useMemo(() => fitInsets(isDesktop, win.height, panelHeight), [isDesktop, win.height, panelHeight]);
+  const polylines = useMemo(() => (active ? routeToPolylines(active, stops) : []), [active, stops]);
+  const markers = useMemo(() => (active ? routeMarkers(active, stops) : []), [active, stops]);
+  const bounds = useMemo(
+    () => (active ? boundsForRoute(active.legs, firstStop && lastStop ? [firstStop, lastStop] : []) : null),
+    [active, firstStop, lastStop],
+  );
+  const insets = useMemo(() => fitInsets(isDesktop, win.height), [isDesktop, win.height]);
   const fitTo = useMemo(() => (bounds ? { bounds, padding: insets } : undefined), [bounds, insets]);
 
-  // 지도 카메라 초기값 — 경로 첫 좌표 기준 (fitTo가 이후 조정)
-  const camera = { center: active?.legs[0]?.start ?? { lat: 37.5665, lng: 126.978 }, zoom: 12 };
-
-  const panelStyle = isDesktop ? styles.panelSide : styles.panelSheet;
+  // 지도 카메라 초기값 — 입력 출발지(없으면 경로 첫 좌표) 기준, fitTo가 이후 조정.
+  // 출발=도착이면 fitTo 없이 그 지점에 가깝게(수도권 전체로 줌아웃하지 않게).
+  const camera = {
+    center: firstStop ?? active?.legs[0]?.start ?? { lat: 37.5665, lng: 126.978 },
+    zoom: sameStops ? 16 : 12,
+  };
+  // 국내 경로만 KST, 해외는 기기 시간대.
+  const region = active ? routeRegion(stops ?? [active.legs[0]!.start, active.legs[active.legs.length - 1]!.end]) : 'kr';
+  const isLongWalk =
+    !!active && active.legs.every((l) => l.mode === 'walk') && active.totalDurationSec > LONG_WALK_SEC;
 
   return (
     <View style={styles.root}>
+      {/* OverlayPanel 웹 통과 CSS가 이 루트까지 pointer-events:none을 걸므로 지도는 명시적으로 auto. */}
       <View style={styles.mapWrap}>
         <MapView camera={camera} polylines={polylines} markers={markers} fitTo={fitTo} />
       </View>
 
-      {/* 스택 헤더가 없는 화면(웹 안내 폴백 등)에서만 */}
-      {onBack && (
-        <View style={styles.topBar} pointerEvents="box-none">
-          <Pressable
-            style={styles.backBtn}
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="뒤로"
-          >
-            <Text style={styles.backIcon}>←</Text>
-          </Pressable>
-        </View>
-      )}
-
-      <View style={panelStyle} onLayout={(e) => setPanelHeight(Math.round(e.nativeEvent.layout.height))}>
-        {active ? (
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {routes.map((r, idx) => {
-              const isActive = r === active;
-              const s = routeSummary(r);
-              const walk = walkMinutes(r);
-              const duration = formatDuration(s.totalDurationSec);
-              const arrival = `${arrivalTime(now, s.totalDurationSec)} 도착`;
-              const a11y = [
-                `경로 ${idx + 1}`,
-                duration,
-                arrival,
-                r.fare !== undefined ? `요금 ${formatFare(r.fare)}` : null,
-                hasTransit(r) ? `환승 ${s.transfers}회` : null,
-              ]
-                .filter(Boolean)
-                .join(', ');
-              return (
-                <Pressable
-                  key={idx}
-                  style={[styles.card, isActive && styles.cardActive]}
-                  onPress={() => setSelected(idx)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={a11y}
-                >
-                  <View style={styles.headerRow}>
-                    <Text style={styles.duration}>{duration}</Text>
-                    <Text style={styles.arrival}>{arrival}</Text>
-                    {r.fare !== undefined && <Text style={styles.fare}>{formatFare(r.fare)}</Text>}
-                  </View>
-                  <SegmentBar route={r} />
-                  <Text style={styles.meta}>
-                    {[
-                      hasTransit(r) ? `환승 ${s.transfers}회` : null,
-                      walk > 0 ? `도보 ${formatMinutes(walk)}` : null,
-                      formatDistance(s.totalDistanceM),
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                  {isActive && <StepList route={r} />}
-                </Pressable>
-              );
-            })}
-
-            {/* 커스텀 경로 메타 — 선호 프로필 + 예산 플래그 (C3 P4). fastest/미존재 시 미표시(하위호환). */}
-            {customMeta && (
-              <View style={styles.customMetaRow}>
-                <Text style={styles.customMetaProfile}>{PREFERENCE_LABEL[customMeta.preference]}</Text>
-                <Text style={customMeta.withinBudget ? styles.withinBudget : styles.overBudget}>
-                  {customMeta.withinBudget ? '예산 내' : '예산 초과'}
-                </Text>
-              </View>
-            )}
-
-            {/* 안내 시작 — 웹은 GPS 안내 불가라 숨긴다. */}
-            {onStartNav && canStartNav(Platform.OS) && (
-              <Pressable
-                style={styles.startNavBtn}
-                onPress={onStartNav}
-                accessibilityRole="button"
-                accessibilityLabel="안내 시작"
-              >
-                <Text style={styles.startNavText}>안내 시작</Text>
-              </Pressable>
-            )}
-          </ScrollView>
-        ) : (
-          <View>
-            <Text style={styles.emptyText} accessibilityRole={error ? 'alert' : undefined}>
-              {error ? routeErrorMessage(error) : '경로를 탐색 중이에요…'}
+      <OverlayPanel initialSnap={RESULT_SHEET_SNAP} title="경로 결과">
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
+          {onBack && (
+            <Pressable
+              style={styles.backRow}
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel="뒤로 가기"
+            >
+              <Text style={styles.backIcon}>←</Text>
+              <Text style={styles.backText}>경로 수정</Text>
+            </Pressable>
+          )}
+          {sameStops ? (
+            <Text style={styles.emptyText} accessibilityRole="alert">
+              출발지와 도착지가 같아요. 다른 도착지를 골라 주세요.
             </Text>
-            {error ? (
-              <ErrorAction
-                error={error}
-                onRetry={onRetry}
-                onSwitchToWalk={onSwitchToWalk}
-                origin={origin}
-                destination={destination}
-                mode={mode}
-              />
-            ) : null}
-          </View>
-        )}
-      </View>
+          ) : active ? (
+            <>
+              {routes.map((r, idx) => {
+                const isActive = r === active;
+                const s = routeSummary(r);
+                const walk = walkMinutes(r);
+                const duration = formatDuration(s.totalDurationSec);
+                const arrival = `${arrivalTime(now, s.totalDurationSec, region)} 도착`;
+                const a11y = [
+                  `경로 ${idx + 1}`,
+                  duration,
+                  arrival,
+                  r.fare !== undefined ? `요금 ${formatFare(r.fare)}` : null,
+                  hasTransit(r) ? `환승 ${s.transfers}회` : null,
+                ]
+                  .filter(Boolean)
+                  .join(', ');
+                return (
+                  <Pressable
+                    key={idx}
+                    style={[styles.card, isActive && styles.cardActive]}
+                    onPress={() => setSelected(idx)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isActive }}
+                    accessibilityLabel={a11y}
+                  >
+                    <View style={styles.headerRow}>
+                      <Text style={styles.duration}>{duration}</Text>
+                      <Text style={styles.arrival}>{arrival}</Text>
+                      {r.fare !== undefined && <Text style={styles.fare}>{formatFare(r.fare)}</Text>}
+                    </View>
+                    <SegmentBar route={r} />
+                    <Text style={styles.meta}>
+                      {[
+                        hasTransit(r) ? `환승 ${s.transfers}회` : null,
+                        walk > 0 ? `도보 ${formatMinutes(walk)}` : null,
+                        formatDistance(s.totalDistanceM),
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                    {isActive && <StepList route={r} />}
+                  </Pressable>
+                );
+              })}
+
+              {isLongWalk && <Text style={styles.hint}>걸어가기엔 너무 멀어요. 대중교통을 이용해 보세요.</Text>}
+
+              {/* 커스텀 경로 메타 — 선호 프로필 + 예산 플래그 (C3 P4). fastest/미존재 시 미표시(하위호환). */}
+              {customMeta && (
+                <View style={styles.customMetaRow}>
+                  <Text style={styles.customMetaProfile}>{PREFERENCE_LABEL[customMeta.preference]}</Text>
+                  <Text style={customMeta.withinBudget ? styles.withinBudget : styles.overBudget}>
+                    {customMeta.withinBudget ? '예산 내' : '예산 초과'}
+                  </Text>
+                </View>
+              )}
+
+              {/* 안내 시작 — 웹은 GPS 안내 불가라 숨긴다. */}
+              {onStartNav && canStartNav(Platform.OS) && (
+                <Pressable
+                  style={styles.startNavBtn}
+                  onPress={onStartNav}
+                  accessibilityRole="button"
+                  accessibilityLabel="안내 시작"
+                >
+                  <Text style={styles.startNavText}>안내 시작</Text>
+                </Pressable>
+              )}
+            </>
+          ) : (
+            <View>
+              <Text style={styles.emptyText} accessibilityRole={error ? 'alert' : undefined}>
+                {error ? routeErrorMessage(error) : '경로를 탐색 중이에요…'}
+              </Text>
+              {error ? (
+                <ErrorAction
+                  error={error}
+                  onRetry={onRetry}
+                  onSwitchToWalk={onSwitchToWalk}
+                  origin={linkStop(origin, firstStop)}
+                  destination={linkStop(destination, lastStop)}
+                  mode={mode}
+                />
+              ) : null}
+            </View>
+          )}
+        </ScrollView>
+      </OverlayPanel>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  mapWrap: { flex: 1 },
-  topBar: { position: 'absolute', top: 12, left: 12 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  backIcon: { fontSize: 18, color: '#333' },
-  panelSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    maxHeight: '55%', // = SHEET_MAX_HEIGHT_RATIO (fitInsets가 같은 값을 가정)
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 8,
-  },
-  panelSide: {
-    position: 'absolute',
-    top: 12,
-    bottom: 12,
-    left: 12,
-    width: SIDE_CARD_WIDTH,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 8,
-  },
+  // 웹 전용 의미 — 네이티브는 기본값이 auto라 무해.
+  mapWrap: { flex: 1, pointerEvents: 'auto' } as ViewStyle,
+  scroll: { flexShrink: 1 },
+  scrollBody: { paddingHorizontal: 16, paddingBottom: 16 },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, alignSelf: 'flex-start', paddingRight: 12 },
+  backIcon: { fontSize: 18, color: '#374151' },
+  backText: { fontSize: 14, color: '#374151', fontWeight: '600' },
+  hint: { fontSize: 13, color: '#b45309', marginBottom: 8 },
   card: {
     minHeight: 44,
     borderRadius: 12,
@@ -389,7 +376,7 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   badgeText: { fontSize: 12, fontWeight: '700' },
   stepText: { fontSize: 13, color: '#333', flexShrink: 1 },
-  emptyText: { fontSize: 14, color: '#999', textAlign: 'center', paddingVertical: 8 },
+  emptyText: { fontSize: 14, color: '#6b7280', textAlign: 'center', paddingVertical: 8 },
   customMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 },
   customMetaProfile: { fontSize: 13, color: '#555', fontWeight: '600' },
   withinBudget: { fontSize: 13, color: '#2e7d32' },

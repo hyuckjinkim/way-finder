@@ -11,6 +11,8 @@
  *  (4) **실패 경로** — `getRoute` reject/타임아웃 시 silent 금지: `onFailed` 신호(reroute_failed
  *      의도) + 기존 경로 유지 + 재시도 가능(에러 로깅).
  *  (5) `REROUTE_DEBOUNCE_MS` 디바운스 — 전이 무장 후 이 시간만큼 대기 후 1회 발사(쿨다운).
+ *  (6) **경유지 보존** — 재탐색 stops = [현재 위치, …아직 안 지난 경유지, 목적지]. 경유지는 순서대로,
+ *      위치 표본이 `WAYPOINT_REACHED_M` 안에 들어오면 지난 것으로 본다.
  *
  * **상태 소유 seam(advisor 지적):** 이 컨트롤러는 navMachine을 소유하지 않으므로 상태
  * 전이(`rerouting`/`reroute_failed`)를 **콜백 채널**(`onRerouting`/`onSuccess`/`onFailed`)로
@@ -18,7 +20,10 @@
  * `getRoute`는 **주입**한다(모듈 모킹 대신 — 신규 fetch 0, 스토어가 RouteService.getRoute 배선).
  */
 import type { LatLng, Route, RouteRequest } from '@wayfinder/shared';
-import { REROUTE_DEBOUNCE_MS } from '@wayfinder/shared';
+import { REROUTE_DEBOUNCE_MS, haversineDistanceM } from '@wayfinder/shared';
+
+/** 경유지를 "지났다"고 보는 반경(m). ponytail: 근접만 본다 — 경유지를 스쳐 지나 이탈하면 남은 것으로 유지. */
+export const WAYPOINT_REACHED_M = 40;
 
 /** 재탐색 사이클 신호 채널 — 스토어/통합 레이어가 상태 전이를 소유한다. */
 export interface RerouteCallbacks {
@@ -57,6 +62,9 @@ export function createRerouteController(
   let inFlight = false;
   let armTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingCoord: LatLng | null = null;
+  // baseRequest.stops = [출발, …경유, 도착] — 가운데가 경유지. 지난 개수만큼 앞에서 뺀다.
+  const waypoints = baseRequest.stops.slice(1, -1);
+  let visited = 0;
 
   function fire(): void {
     armTimer = null;
@@ -68,7 +76,7 @@ export function createRerouteController(
     inFlight = true;
     callbacks.onRerouting?.();
 
-    getRoute({ ...baseRequest, stops: [currentCoord, destination] })
+    getRoute({ ...baseRequest, stops: [currentCoord, ...waypoints.slice(visited), destination] })
       .then((route) => {
         inFlight = false;
         callbacks.onSuccess(route);
@@ -89,6 +97,9 @@ export function createRerouteController(
 
   return {
     onSample(isOffRoute, currentCoord) {
+      while (visited < waypoints.length && haversineDistanceM(currentCoord, waypoints[visited]!) <= WAYPOINT_REACHED_M) {
+        visited += 1;
+      }
       if (isOffRoute) {
         pendingCoord = currentCoord; // 발사 시 최신 위치 사용.
       }

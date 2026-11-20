@@ -3,14 +3,18 @@
  * react-native 비의존(단위 테스트 용이). 색은 routeToPolylines의 leg 색을 그대로 쓴다.
  */
 import type { Insets, LatLng, MapMarker, Route, TravelMode } from '@wayfinder/shared';
-import { routeToPolylines } from './routeToPolylines.js';
+import { haversineDistanceM } from '@wayfinder/shared';
+import { routeToPolylines, STOP_GAP_M } from './routeToPolylines.js';
+import { CARD_INSET, CARD_WIDTH, SNAP_FRACTIONS } from '../components/sheetSnap.js';
 
-/** 이 너비 이상이면 좌측 플로팅 카드, 미만이면 하단 시트. */
-export const DESKTOP_MIN_WIDTH = 768;
-/** 데스크톱 좌측 카드 너비(px). */
-export const SIDE_CARD_WIDTH = 400;
-/** 폰 하단 시트 최대 높이 비율. */
-export const SHEET_MAX_HEIGHT_RATIO = 0.55;
+/** 결과 시트(폰)의 처음 높이 — 짧은 결과도 빈 공간이 크지 않게 중간. */
+export const RESULT_SHEET_SNAP = 'half' as const;
+
+/** 이 시간(초)을 넘는 도보는 대중교통 권유 문구를 붙인다. */
+export const LONG_WALK_SEC = 3 * 3600;
+
+/** 두 지점이 사실상 같은 곳인지(출발=도착 입력 방지). */
+export const isSameStop = (a: LatLng, b: LatLng): boolean => haversineDistanceM(a, b) <= STOP_GAP_M;
 
 const FIT_MARGIN = 40;
 
@@ -33,17 +37,16 @@ export function formatFare(won: number): string {
   return `${String(Math.round(won)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}원`;
 }
 
-/** 한국 시각(KST) HH:MM — 기기 시간대와 무관. h23: hour12:false는 일부 엔진에서 "24:10"을 낸다. */
-const KST_TIME = new Intl.DateTimeFormat('en-GB', {
-  timeZone: 'Asia/Seoul',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-});
+/** HH:MM 포맷터. h23: hour12:false는 일부 엔진에서 "24:10"을 낸다. timeZone 미지정 = 기기 시간대. */
+const timeFormat = (timeZone?: string): Intl.DateTimeFormat =>
+  new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const KST_TIME = timeFormat('Asia/Seoul');
+const LOCAL_TIME = timeFormat();
 
-/** 현재 시각 + 소요 → 도착 예정 "HH:MM"(Asia/Seoul). */
-export function arrivalTime(now: Date, durationSec: number): string {
-  const parts = KST_TIME.formatToParts(new Date(now.getTime() + durationSec * 1000));
+/** 현재 시각 + 소요 → 도착 예정 "HH:MM". 국내(kr) 경로는 기기 시간대와 무관하게 KST, 그 외는 기기 시간대. */
+export function arrivalTime(now: Date, durationSec: number, region: 'kr' | 'global' = 'kr'): string {
+  const fmt = region === 'kr' ? KST_TIME : LOCAL_TIME;
+  const parts = fmt.formatToParts(new Date(now.getTime() + durationSec * 1000));
   const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '00';
   return `${get('hour')}:${get('minute')}`;
 }
@@ -125,6 +128,12 @@ export interface LinkStop {
 
 const KAKAO_BY: Record<TravelMode, string> = { transit: 'traffic', walk: 'walk', car: 'car', bike: 'bicycle' };
 
+/** URL 이름이 없으면(스토어 폴백 진입) 좌표를 이름으로 쓴다. */
+export function linkStop(stop: LinkStop | undefined, coord: LatLng | undefined): LinkStop | undefined {
+  if (stop) return stop;
+  return coord ? { label: `${coord.lat.toFixed(5)},${coord.lng.toFixed(5)}`, coord } : undefined;
+}
+
 /** 카카오맵 웹 길찾기 링크 — 클라이언트에서 만들어 API 쿼터를 쓰지 않는다(쿼터 소진 시 대안). */
 export function kakaoMapLink(origin: LinkStop, destination: LinkStop, mode: TravelMode): string {
   const seg = (s: LinkStop): string => `${encodeURIComponent(s.label)},${s.coord.lat},${s.coord.lng}`;
@@ -140,32 +149,39 @@ export function readableTextColor(hex: string): string {
   return lum > 0.65 ? '#111' : '#fff';
 }
 
-/** 출발·도착 + 대중교통 leg 시작점(환승/승차) 마커. */
-export function routeMarkers(route: Route): MapMarker[] {
+/**
+ * 출발·도착 + 대중교통 leg 시작점(환승/승차) 마커.
+ * stops(입력 출발…도착)가 있으면 출·도 마커를 실제 입력 지점에 둔다(카카오 대중교통은 첫/끝 도보가 없어
+ * leg 끝점이 역이다). 출·도와 30 m 이내의 승차 점은 빼고, 출·도를 마지막에 넣어 위에 그려지게 한다.
+ */
+export function routeMarkers(route: Route, stops?: LatLng[]): MapMarker[] {
   const first = route.legs[0];
   const last = route.legs[route.legs.length - 1];
   if (!first || !last) return [];
+  const origin = stops?.[0] ?? first.start;
+  const destination = stops?.[stops.length - 1] ?? last.end;
   const colors = legColors(route);
-  const markers: MapMarker[] = [{ id: 'origin', coord: first.start, kind: 'origin' }];
+  const markers: MapMarker[] = [];
   route.legs.forEach((l, i) => {
-    if (l.mode === 'transit') {
+    if (l.mode === 'transit' && !isSameStop(l.start, origin) && !isSameStop(l.start, destination)) {
       markers.push({ id: `transfer-${i}`, coord: l.start, kind: 'transfer', color: colors[i] });
     }
   });
-  markers.push({ id: 'destination', coord: last.end, kind: 'destination' });
+  // 출·도는 마지막에 — 같은 zIndex면 나중에 그린 게 위라, 짧은 첫 도보 끝의 승차 점이 '출'을 덮지 않는다.
+  markers.push({ id: 'origin', coord: origin, kind: 'origin' }, { id: 'destination', coord: destination, kind: 'destination' });
   return markers;
 }
 
 /**
- * 결과 패널에 가려지지 않는 지도 영역 여백.
- * 데스크톱: 좌측 카드 폭만큼 left. 폰: 측정한 패널 높이(미측정이면 최대 높이)만큼 bottom.
+ * 결과 패널(OverlayPanel)에 가려지지 않는 지도 영역 여백.
+ * 데스크톱: 좌측 플로팅 카드(inset + 폭)만큼 left. 폰: 결과 시트 처음 높이만큼 bottom.
  */
-export function fitInsets(isDesktop: boolean, windowHeight: number, panelHeight: number): Insets {
+export function fitInsets(isDesktop: boolean, windowHeight: number): Insets {
   if (isDesktop) {
-    return { top: FIT_MARGIN, right: FIT_MARGIN, bottom: FIT_MARGIN, left: SIDE_CARD_WIDTH + FIT_MARGIN };
+    return { top: FIT_MARGIN, right: FIT_MARGIN, bottom: FIT_MARGIN, left: CARD_INSET + CARD_WIDTH + FIT_MARGIN };
   }
-  const h = panelHeight > 0 ? panelHeight : windowHeight * SHEET_MAX_HEIGHT_RATIO;
-  return { top: FIT_MARGIN, right: FIT_MARGIN, bottom: Math.round(h) + FIT_MARGIN / 2, left: FIT_MARGIN };
+  const sheet = Math.round(windowHeight * SNAP_FRACTIONS[RESULT_SHEET_SNAP]);
+  return { top: FIT_MARGIN, right: FIT_MARGIN, bottom: sheet + FIT_MARGIN / 2, left: FIT_MARGIN };
 }
 
 /** 웹에서는 안내(턴바이턴) 비활성 — GPS 추적이 불가능해 네이티브 전용. */

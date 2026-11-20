@@ -10,7 +10,7 @@
  * react-dom/server.renderToStaticMarkup 패턴 (RouteResultScreen.test.tsx 계승).
  * 의존성 추가 없음.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { NavState, Route } from '@wayfinder/shared';
@@ -21,6 +21,12 @@ import { NavScreen as WebNavScreen } from './NavScreen.web.tsx';
 // 네이티브 분기: NavScreen.tsx 직접 명시 임포트
 // (allowImportingTsExtensions: true — tsconfig.json, noEmit 프로젝트에서 안전)
 import { NavScreen as NativeNavScreen } from './NavScreen.tsx';
+
+// OverlayPanel은 마운트 후에만 그린다(SSR 하이드레이션) — 정적 렌더 테스트에선 내용만 통과시킨다.
+vi.mock('../components/OverlayPanel', async (orig) => ({
+  ...(await orig<typeof import('../components/OverlayPanel')>()),
+  OverlayPanel: ({ children }: { children: React.ReactNode }) => children,
+}));
 
 const render = (el: React.ReactElement): string => renderToStaticMarkup(el);
 
