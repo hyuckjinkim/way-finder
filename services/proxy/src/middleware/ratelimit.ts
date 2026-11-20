@@ -13,11 +13,12 @@ import type { Env } from '../config.js';
 
 const RETRY_AFTER_SEC = 60;
 
-export async function rateLimitMiddleware(
+/** binding으로 지정한 Rate Limiting 바인딩을 쓰는 미들웨어. */
+export const rateLimitBy = (binding: 'RATE_LIMITER' | 'ROUTES_RATE_LIMITER') => async (
   c: Context<{ Bindings: Env }>,
   next: Next,
-): Promise<void | Response> {
-  const limiter = c.env.RATE_LIMITER;
+): Promise<void | Response> => {
+  const limiter = c.env[binding];
   if (limiter) {
     const ip =
       c.req.header('CF-Connecting-IP') ??
@@ -37,4 +38,9 @@ export async function rateLimitMiddleware(
     }
   }
   await next();
-}
+};
+
+/** /v1/* 전역 60 req/min. */
+export const rateLimitMiddleware = rateLimitBy('RATE_LIMITER');
+/** POST /v1/routes 전용 10 req/min (카카오 대중교통 일일 상한 보호). */
+export const routesRateLimit = rateLimitBy('ROUTES_RATE_LIMITER');

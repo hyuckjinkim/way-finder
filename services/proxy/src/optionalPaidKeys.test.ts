@@ -7,6 +7,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import app from './index.js';
 import { isDemoMode, isRouteDemoMode, type Env } from './config.js';
 import { KAKAO_LOCAL_SEARCH_RAW } from './fixtures/kakaoLocal.js';
+import { KAKAO_TRANSIT_RAW, fakeQuotaNamespace } from './fixtures/kakaoTransit.js';
 import { routesPath } from '@wayfinder/shared/api';
 import { TMAP_PEDESTRIAN_RAW } from '../test/fixtures/tmapPedestrian.js';
 
@@ -66,7 +67,7 @@ describe('유료 가능 키 없이 무료 키만 설정', () => {
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes('dapi.kakao.com'))).toBe(true);
   });
 
-  it('kr 길찾기: 모드별 공급자 키만 본다 (도보=TMAP, 자전거=Valhalla, 대중교통=ODsay, 자동차=카카오모빌리티)', () => {
+  it('kr 길찾기: 모드별 공급자 키만 본다 (도보=TMAP, 자전거=Valhalla, 대중교통=카카오 REST, 자동차=카카오모빌리티)', () => {
     const env = freeOnlyEnv();
     expect(isRouteDemoMode(env, 'kr', 'walk')).toBe(false);
     expect(isRouteDemoMode(env, 'kr', 'transit')).toBe(false);
@@ -93,10 +94,13 @@ describe('유료 가능 키 없이 무료 키만 설정', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('POST 대중교통: ODsay 키만 없어도 501 (transit 핸들러도 동일 게이트)', async () => {
-    vi.stubGlobal('fetch', vi.fn());
-    const res = await postRoute('transit', { ...freeOnlyEnv(), ODSAY_API_KEY: '' });
-    expect(res.status).toBe(501);
+  it('POST 대중교통: 프록시는 ODsay를 안 쓴다 — ODsay 키 없어도 카카오 대중교통 실호출', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => KAKAO_TRANSIT_RAW });
+    vi.stubGlobal('fetch', fetchMock);
+    const env = { ...freeOnlyEnv(), ODSAY_API_KEY: '', KAKAO_TRANSIT_QUOTA: fakeQuotaNamespace() };
+    const res = await postRoute('transit', env);
+    expect(res.status).toBe(200);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes('routing/publictraffic'))).toBe(true);
   });
 
   it('키 0개(앱 전체 데모)면 기존처럼 mock 경로 200 — 개발 흐름 유지', async () => {
@@ -142,14 +146,17 @@ describe('CORS — 웹 앱(Pages)에서 호출 가능', () => {
   });
 });
 
-describe('ODsay 실패는 200 빈 경로가 아니라 502', () => {
+describe('대중교통 공급자 실패는 200 빈 경로가 아니라 502', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('ODsay가 HTTP 200 + error 본문(인증 실패 등)을 주면 502', async () => {
+  it('카카오가 HTTP 200 + 알 수 없는 본문을 주면 502 upstream', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true, json: async () => ({ error: [{ code: '500', message: 'ApiKeyAuthFailed' }] }),
+      ok: true, status: 200, json: async () => ({ errorType: 'InvalidArgument' }),
     }));
-    const res = await postRoute('transit', freeOnlyEnv());
+    const res = await postRoute('transit', { ...freeOnlyEnv(), KAKAO_TRANSIT_QUOTA: fakeQuotaNamespace() });
     expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ code: 'upstream' });
+    err.mockRestore();
   });
 });

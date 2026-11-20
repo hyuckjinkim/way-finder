@@ -20,7 +20,7 @@ export interface Env {
   KAKAO_MOBILITY_KEY: string;
   TMAP_APP_KEY: string;
   GOOGLE_ROUTES_KEY: string;
-  // ODsay 대중교통(한국 시내·도시간) API 키. kr transit 실 모드 게이트.
+  // ODsay 대중교통 키. 프록시는 쓰지 않는다(Server 키 IP 제한 — Workers 고정 IP 없음, 웹이 직접 호출).
   ODSAY_API_KEY: string;
   MAPBOX_TOKEN: string;
   // Valhalla 커스텀 도보 라우팅 URL (P4 — 로컬 self-hosted, 키 불필요).
@@ -29,6 +29,10 @@ export interface Env {
   CACHE: KVNamespace;
   // Workers Rate Limiting 바인딩 (wrangler.toml [[ratelimits]]). 미설정 시 레이트리밋 통과.
   RATE_LIMITER?: RateLimit;
+  // POST /v1/routes 전용 더 좁은 IP 레이트리밋 (wrangler.toml [[ratelimits]] ROUTES_RATE_LIMITER).
+  ROUTES_RATE_LIMITER?: RateLimit;
+  // 카카오 대중교통 일일 상한 카운터 (Durable Object). 미설정 시 kr 대중교통 차단(fail-closed).
+  KAKAO_TRANSIT_QUOTA?: DurableObjectNamespace;
 }
 
 /**
@@ -50,7 +54,7 @@ export function isDemoMode(env: Env): boolean {
  * 라우팅 데모 모드 여부 (A4). 지역·모드별로 필요한 공급자 키가 있는지 본다.
  * - DEMO_MODE='true'/'false'는 전역 강제 (장소와 동일 시맨틱).
  * - 'auto': 해당 모드의 공급자 키가 있으면 실 모드, 비면 데모(mockRouteProvider).
- *   - kr + transit  → ODsay 키 (시내·도시간 대중교통).
+ *   - kr + transit  → 카카오 REST 키 (카카오 대중교통 — ODsay Server 키는 Workers에서 IP 제한으로 불가).
  *   - kr + car      → 카카오모빌리티 키 (유료 가능 — 비워도 다른 모드 영향 없음).
  *   - kr + walk     → TMAP 키.
  *   - kr + bike     → VALHALLA_URL (TMAP엔 자전거 API 없음 — 자체 호스팅 Valhalla bicycle).
@@ -70,7 +74,7 @@ export function isRouteDemoMode(
   // "auto": 지역·모드별 필수 키가 전부 존재해야 실 모드
   // 모드별 공급자 키만 본다 — 카카오모빌리티(유료 가능)가 없어도 도보·자전거(TMAP)는 실 모드.
   if (region === 'kr') {
-    if (mode === 'transit') return !env.ODSAY_API_KEY;
+    if (mode === 'transit') return !env.KAKAO_REST_KEY;
     if (mode === 'car') return !env.KAKAO_MOBILITY_KEY;
     if (mode === 'bike') return !env.VALHALLA_URL;
     return !env.TMAP_APP_KEY;

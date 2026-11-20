@@ -11,11 +11,14 @@
 import type { LatLng, RouteRequest, Route } from '@wayfinder/shared';
 import type { KVStore, Defer } from './kv.js';
 
-/** 대중교통 경로 캐시 TTL(초). ODsay 데이터 변동성·쿼터 균형 — 6h. */
-export const ROUTE_CACHE_TTL = 6 * 60 * 60;
+/**
+ * 대중교통 경로 캐시 TTL(초) — 15분. 카카오 대중교통(1,000/일) 재탐색 방어용이되 운행 상황이 바뀌므로 짧게.
+ * ponytail: 미스마다 KV put 1건 — KV 쓰기 무료 1,000/일을 장소 캐시와 공유. 쓰기 한도가 차면 TTL·put 조건 재검토.
+ */
+export const ROUTE_CACHE_TTL = 15 * 60;
 
-/** 캐시 키 좌표 반올림 소수 자리 (≈11m 해상도 — 동일 정류장 요청 수렴). */
-const COORD_PRECISION = 5;
+/** 캐시 키 좌표 반올림 소수 자리 (≈11m 해상도 — 같은 장소 재탐색 수렴). */
+const COORD_PRECISION = 4;
 
 /** 캐시 키 프리픽스 (kv.ts CachePrefix와 별개 네임스페이스). */
 const ROUTE_KEY_PREFIX = 'route:transit';

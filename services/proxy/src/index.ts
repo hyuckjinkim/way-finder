@@ -20,7 +20,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { placesSearchPath, blogsPath, routesPath, capabilitiesPath } from '@wayfinder/shared/api';
 import type { Env } from './config.js';
-import { rateLimitMiddleware } from './middleware/ratelimit.js';
+import { rateLimitMiddleware, routesRateLimit } from './middleware/ratelimit.js';
 import { handlePlacesSearch } from './routes/places-search.js';
 import { handlePlaceDetail } from './routes/place-detail.js';
 import { handlePlaceGoogle } from './routes/place-google.js';
@@ -48,7 +48,8 @@ app.get(blogsPath, handleBlogs);
 app.get(capabilitiesPath, handleCapabilities);
 
 // POST /v1/routes — 모드 디스패치 (F1 C2). A/B가 핸들러 stub을 덮어쓴다.
-app.post(routesPath, dispatchRoutes);
+// 경로는 전역 한도에 더해 전용 한도(10/min)를 한 번 더 — 프리플라이트(OPTIONS)는 세지 않는다.
+app.post(routesPath, routesRateLimit, dispatchRoutes);
 
 // 미처리 예외 → JSON 500 (Hono 기본은 text/plain이라 앱이 파싱 실패)
 app.onError((err, c) => {
@@ -60,3 +61,6 @@ app.onError((err, c) => {
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
 
 export default app;
+
+// Durable Object 클래스는 메인 모듈에서 named export 해야 wrangler가 바인딩한다.
+export { KakaoTransitQuota } from './quota/transitQuota.js';

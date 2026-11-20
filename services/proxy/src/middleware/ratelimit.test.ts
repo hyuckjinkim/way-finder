@@ -44,3 +44,18 @@ describe('rateLimitMiddleware', () => {
     err.mockRestore();
   });
 });
+
+describe('routesRateLimit — POST /v1/routes 전용 한도', () => {
+  it('ROUTES_RATE_LIMITER 초과면 429, 다른 경로는 영향 없음', async () => {
+    const { default: app } = await import('../index.js');
+    const env = { DEMO_MODE: 'true', ROUTES_RATE_LIMITER: { limit: async () => ({ success: false }) } };
+    const post = await app.fetch(
+      new Request('http://localhost/v1/routes', { method: 'POST', body: '{}' }),
+      env,
+      {} as ExecutionContext,
+    );
+    expect(post.status).toBe(429);
+    const health = await app.fetch(new Request('http://localhost/v1/capabilities'), env, {} as ExecutionContext);
+    expect(health.status).toBe(200);
+  });
+});

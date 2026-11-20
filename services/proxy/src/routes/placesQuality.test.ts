@@ -239,3 +239,45 @@ describe('app.onError', () => {
     err.mockRestore();
   });
 });
+
+describe('GET /v1/places/search — 역 약칭·입력 검증·공급자 실패', () => {
+  const search = (qs: string, env = realEnv()) => call(`${placesSearchPath}?${qs}`, env);
+
+  it.each([
+    ['구디', '구로디지털단지역'],
+    ['가디', '가산디지털단지역'],
+    ['고터', '고속터미널역'],
+    ['dmc', '디지털미디어시티역'],
+  ])('%s → 카카오에 %s로 질의', async (abbr, full) => {
+    const calls = stubFetch(() => ({ documents: [doc('1', `${full} 2호선`, { category_group_code: 'SW8' })] }));
+    const res = await search(`q=${encodeURIComponent(abbr)}`);
+    expect(res.status).toBe(200);
+    expect(calls[0]!.searchParams.get('query')).toBe(full);
+  });
+
+  it('약칭으로 시작하는 상호(구디별밤)는 그대로', async () => {
+    const calls = stubFetch(() => ({ documents: [doc('1', '구디별밤')] }));
+    await search(`q=${encodeURIComponent('구디별밤')}`);
+    expect(calls[0]!.searchParams.get('query')).toBe('구디별밤');
+  });
+
+  it('lat/lng가 숫자가 아니면 400', async () => {
+    stubFetch(() => ({ documents: [] }));
+    expect((await search('q=cafe&lat=abc&lng=127')).status).toBe(400);
+    expect((await search('q=cafe&lat=37.5&lng=999')).status).toBe(400);
+  });
+
+  it('q 100자 초과면 400', async () => {
+    stubFetch(() => ({ documents: [] }));
+    expect((await search(`q=${'a'.repeat(101)}`)).status).toBe(400);
+  });
+
+  it('공급자 실패 → 200 []가 아니라 502', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
+    const res = await search('q=cafe&lat=37.5&lng=127');
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ code: 'upstream' });
+    err.mockRestore();
+  });
+});

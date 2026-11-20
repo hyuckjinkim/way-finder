@@ -18,6 +18,22 @@ name = "RATE_LIMITER"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }
 
+# POST /v1/routes 전용 — 대중교통 카카오 일일 상한을 한 IP가 태우지 못하게 (전역 한도에 추가).
+[[ratelimits]]
+name = "ROUTES_RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 10, period = 60 }
+
+# 카카오 대중교통 일일 하드 상한(950/일, KST) — SQLite 기반 Durable Object 원자 카운터.
+# 배포 시 migrations가 클래스를 생성한다 (무료 플랜은 new_sqlite_classes만 허용).
+[[durable_objects.bindings]]
+name = "KAKAO_TRANSIT_QUOTA"
+class_name = "KakaoTransitQuota"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["KakaoTransitQuota"]
+
 # 비밀이 아닌 런타임 플래그. 키 미설정 시 앱은 데모 모드로 동작 (스트림 A5).
 [vars]
 DEMO_MODE = "auto"

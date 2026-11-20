@@ -49,6 +49,32 @@ async function keywordKakao(q: string, lat: number, lng: number, key: string): P
 const isShortHangul = (q: string) => /^[가-힣]{1,4}$/.test(q) && !q.endsWith('역');
 const MAX_PROMOTED_STATIONS = 2;
 
+/**
+ * 역 약칭 → 정식 질의. 카카오가 약칭을 역으로 못 찾는 것만(2026-11-20 라이브 확인: 구디→구디별밤류,
+ * 설입→식당, 홍입·동역사→0건, DMC→디엠씨 상호). 홍대·건대·교대·숙대 등은 카카오/역 승격이 이미 처리.
+ * 질의 전체가 정확히 일치할 때만 치환 — "구디별밤" 같은 상호 검색은 그대로.
+ */
+const STATION_ALIASES: Record<string, string> = {
+  구디: '구로디지털단지역',
+  가디: '가산디지털단지역',
+  고터: '고속터미널역',
+  설입: '서울대입구역',
+  홍입: '홍대입구역',
+  건입: '건대입구역',
+  동역사: '동대문역사문화공원역',
+  디엠씨: '디지털미디어시티역',
+  DMC: '디지털미디어시티역',
+};
+
+/** 약칭이면 정식 질의로, 아니면 trim만. */
+export function expandAlias(q: string): string {
+  const term = q.trim();
+  return STATION_ALIASES[term.toUpperCase()] ?? term;
+}
+
+/** 질의 길이 상한 — 긴 입력이 공급자·캐시 키로 그대로 가지 않게. */
+const MAX_QUERY_LEN = 100;
+
 /** 주소로 보이는 질의 (로/길/동/번지 + 숫자). */
 const looksLikeAddress = (q: string) => /(로|길|동|번지)/.test(q) && /\d/.test(q);
 
@@ -126,14 +152,28 @@ async function searchGoogle(q: string, lat: number, lng: number, key: string): P
   return (data.places ?? []).map(normalizeGooglePlace);
 }
 
-export async function handlePlacesSearch(c: Context<{ Bindings: Env }>): Promise<Response> {
-  const q = c.req.query('q') ?? '';
-  const latStr = c.req.query('lat');
-  const lngStr = c.req.query('lng');
+/** lat/lng 쿼리 파싱 — 미지정은 기본값, 숫자가 아니거나 범위 밖이면 null. */
+function parseCoord(raw: string | undefined, fallback: number, limit: number): number | null {
+  if (raw === undefined || raw === '') return fallback;
+  const v = Number(raw);
+  return Number.isFinite(v) && Math.abs(v) <= limit ? v : null;
+}
 
-  if (!q.trim()) {
+export async function handlePlacesSearch(c: Context<{ Bindings: Env }>): Promise<Response> {
+  const raw = c.req.query('q') ?? '';
+
+  if (!raw.trim()) {
     return c.json({ error: 'q parameter is required' }, 400);
   }
+  if (raw.length > MAX_QUERY_LEN) {
+    return c.json({ error: `q must be at most ${MAX_QUERY_LEN} characters` }, 400);
+  }
+  const lat = parseCoord(c.req.query('lat'), 37.5665, 90); // 기본: 서울
+  const lng = parseCoord(c.req.query('lng'), 126.978, 180);
+  if (lat === null || lng === null) {
+    return c.json({ error: 'lat/lng must be numeric coordinates' }, 400);
+  }
+  const q = expandAlias(raw);
 
   // 데모 모드
   if (isDemoMode(c.env)) {
@@ -141,28 +181,25 @@ export async function handlePlacesSearch(c: Context<{ Bindings: Env }>): Promise
     return c.json(places);
   }
 
-  const lat = latStr ? parseFloat(latStr) : 37.5665; // 기본: 서울
-  const lng = lngStr ? parseFloat(lngStr) : 126.9780;
-
   const useKakao = selectRenderer({ lat, lng }, 10) === 'korea';
   // 좌표는 소수 2자리(≈1km)로 반올림 — 같은 동네 검색이 같은 키로 수렴 (q는 normalizeKey로 정규화).
   const cacheKey = `search:${useKakao ? 'kakao' : 'google'}:${normalizeKey(q)}:${lat.toFixed(2)}:${lng.toFixed(2)}`;
 
-  const places = await cacheGetOrSet(
-    c.env.CACHE,
-    'place',
-    cacheKey,
-    () =>
-      fetchWithFallback(
-        () =>
-          useKakao
-            ? searchKakao(q, lat, lng, c.env.KAKAO_REST_KEY)
-            : searchGoogle(q, lat, lng, c.env.GOOGLE_PLACES_KEY),
-        [] as Place[],
-        useKakao ? 'kakao-search' : 'google-search',
-      ),
-    deferFrom(c),
-  );
-
-  return c.json(places);
+  // 공급자 실패는 502 — `200 []`로 숨기면 앱이 "결과 없음"으로 오인한다.
+  try {
+    const places = await cacheGetOrSet(
+      c.env.CACHE,
+      'place',
+      cacheKey,
+      () =>
+        useKakao
+          ? searchKakao(q, lat, lng, c.env.KAKAO_REST_KEY)
+          : searchGoogle(q, lat, lng, c.env.GOOGLE_PLACES_KEY),
+      deferFrom(c),
+    );
+    return c.json(places);
+  } catch (err) {
+    console.error(`[search] ${useKakao ? 'kakao' : 'google'} failed:`, err);
+    return c.json({ error: 'search provider failed', code: 'upstream' }, 502);
+  }
 }
