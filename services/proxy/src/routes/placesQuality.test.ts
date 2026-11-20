@@ -96,6 +96,31 @@ describe('GET /v1/places/:id — 힌트로 카카오 상세 조회 (P0 404 회�
   });
 });
 
+describe('GET /v1/places/:id — 공급자 판별', () => {
+  it.each([placeDetailPath('naver:1'), placeGooglePath('naver:1')])('알 수 없는 prefix는 400 (%s)', async (path) => {
+    const calls = stubFetch(() => ({ documents: [] }));
+    expect((await call(path, realEnv())).status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('google: 힌트의 이름·좌표와 place_id 지도 링크를 쓴다 ({0,0}·raw id 금지)', async () => {
+    stubFetch(() => ({ documents: [] }));
+    const hint = { name: 'Eiffel Tower', coord: { lat: 48.8584, lng: 2.2945 } };
+    const res = await call(placeDetailPath('google:ChIJLU7jZClu5kcR4PcOOO6p3I0', hint), realEnv());
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { name: string; coord: unknown; links: { googleMaps: string } };
+    expect(body.name).toBe('Eiffel Tower');
+    expect(body.coord).toEqual({ lat: 48.8584, lng: 2.2945 });
+    expect(body.links.googleMaps).toBe('https://www.google.com/maps/place/?q=place_id:ChIJLU7jZClu5kcR4PcOOO6p3I0');
+  });
+
+  it('google: 힌트 없으면 404 (구글·블로그 호출 없음)', async () => {
+    const calls = stubFetch(() => ({ documents: [] }));
+    expect((await call(placeDetailPath('google:ChIJx'), realEnv())).status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('GET /v1/places/:id/google — 캐시 키는 카카오 id (동명 지점 리뷰 혼입 방지)', () => {
   it('같은 이름·다른 id의 두 지점이 서로 다른 구글 캐시 키를 쓴다', async () => {
     stubFetch((u) => {

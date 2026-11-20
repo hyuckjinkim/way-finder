@@ -14,7 +14,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import maplibregl, { type Map as MlMap, type Marker as MlMarker } from 'maplibre-gl';
 import type { MapViewProps, MapViewRef } from '@wayfinder/shared';
 import {
@@ -39,6 +39,8 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
     const polylineIdsRef = useRef<string[]>([]);
     // 스타일 로드 완료 후에야 source/layer를 추가할 수 있다.
     const [styleReady, setStyleReady] = useState(false);
+    // 첫 타일이 오기 전(스타일·타일 전부 실패) 에러는 지도가 비어 보이므로 안내. 이후 개별 타일 실패는 로그만.
+    const [loadFailed, setLoadFailed] = useState(false);
 
     const onPressRef = useRef(onPress);
     const onCameraChangeRef = useRef(onCameraChange);
@@ -79,6 +81,17 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
       mapRef.current = map;
 
       map.on('load', () => setStyleReady(true));
+      // 'load'는 타일이 전부 실패해도 올 수 있어, 타일 1장이라도 받은 뒤에야 배너를 걷는다.
+      let gotTile = false;
+      map.on('sourcedata', (e) => {
+        if (gotTile || !e.tile) return;
+        gotTile = true;
+        setLoadFailed(false);
+      });
+      map.on('error', (e) => {
+        console.warn('[map] maplibre error:', e.error?.message ?? e);
+        if (!gotTile) setLoadFailed(true);
+      });
       map.on('click', (e) => {
         onPressRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
       });
@@ -180,11 +193,18 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
     }, [fitToKey]);
 
     return (
-      <View
-        // @ts-expect-error react-native-web의 View ref는 DOM 엘리먼트(HTMLDivElement)다.
-        ref={containerRef}
-        style={styles.map}
-      />
+      <View style={styles.map}>
+        <View
+          // @ts-expect-error react-native-web의 View ref는 DOM 엘리먼트(HTMLDivElement)다.
+          ref={containerRef}
+          style={styles.map}
+        />
+        {loadFailed && (
+          <View style={styles.errorBanner} pointerEvents="none">
+            <Text style={styles.errorText}>지도를 불러오지 못했습니다. 네트워크를 확인해 주세요.</Text>
+          </View>
+        )}
+      </View>
     );
   },
 );
@@ -192,6 +212,20 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
 const styles = StyleSheet.create({
   map: {
     flex: 1,
+  },
+  errorBanner: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(30,30,40,0.85)',
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 13,
+    textAlign: 'center',
   },
 });
 

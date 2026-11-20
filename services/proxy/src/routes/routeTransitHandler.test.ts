@@ -192,6 +192,22 @@ describe('POST /v1/routes mode=transit — kr 카카오 대중교통', () => {
     expect(usage(quota)).toBe(2);
   });
 
+  it('경유지 구간은 예약 후 병렬 호출된다 (동시 in-flight = 구간 수)', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      peak = Math.max(peak, ++inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return { ok: true, status: 200, json: async () => KAKAO_TRANSIT_RAW };
+    }));
+    const quota = new Map<string, unknown>();
+    const res = await postRoutes({ stops: [SEOUL_A, SEOUL_B, SEOUL_C], mode: 'transit' }, realEnv(quota));
+    expect(res.status).toBe(200);
+    expect(peak).toBe(2);
+    expect(usage(quota)).toBe(2);
+  });
+
   it('캐시 히트는 카카오·카운터를 소비하지 않는다', async () => {
     const fetchSpy = kakaoOk();
     vi.stubGlobal('fetch', fetchSpy);

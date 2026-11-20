@@ -439,6 +439,9 @@ export function fakeQuotaNamespace(storage = new Map<string, unknown>(), now?: (
       storage: {
         get: async (k: string) => storage.get(k),
         put: async (k: string, v: unknown) => void storage.set(k, v),
+        list: async ({ prefix }: { prefix: string }) =>
+          new Map([...storage].filter(([k]) => k.startsWith(prefix))),
+        delete: async (keys: string[]) => keys.filter((k) => storage.delete(k)).length,
       },
     } as unknown as DurableObjectState,
     {},

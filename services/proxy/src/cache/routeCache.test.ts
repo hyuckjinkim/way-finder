@@ -1,33 +1,12 @@
 /**
- * B4 — 대중교통 경로 KV 캐싱 단위 테스트.
- * 키 결정론·캐시 히트 시 fetcher 미실행(쿼터 방어)·TTL 검증.
+ * 대중교통 경로 캐시(쿼터 DO 저장) 단위 테스트.
+ * 키 결정론·라운드트립·TTL 만료·만료 항목 정리·캐시 경로가 예약을 소비하지 않음을 검증.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import type { RouteRequest, Route } from '@wayfinder/shared';
-import type { KVStore } from './kv.js';
-import {
-  routeCacheKey,
-  getCachedRoute,
-  putCachedRoute,
-  getOrFetchRoute,
-  ROUTE_CACHE_TTL,
-} from './routeCache.js';
-
-/** 인메모리 KVStore 목 (TTL 기록). */
-function makeKV(): KVStore & { ttls: Map<string, number | undefined> } {
-  const store = new Map<string, string>();
-  const ttls = new Map<string, number | undefined>();
-  return {
-    ttls,
-    async get(key: string) {
-      return store.get(key) ?? null;
-    },
-    async put(key: string, value: string, options?: { expirationTtl?: number }) {
-      store.set(key, value);
-      ttls.set(key, options?.expirationTtl);
-    },
-  };
-}
+import { routeCacheKey, getCachedRoute, putCachedRoute } from './routeCache.js';
+import { ROUTE_CACHE_TTL_MS } from '../quota/transitQuota.js';
+import { fakeQuotaNamespace } from '../fixtures/kakaoTransit.js';
 
 const REQ: RouteRequest = {
   stops: [
@@ -84,36 +63,41 @@ describe('routeCacheKey — 결정론', () => {
   });
 });
 
-describe('get/put 라운드트립', () => {
-  it('put 후 get이 동일 Route를 반환', async () => {
-    const kv = makeKV();
-    expect(await getCachedRoute(kv, REQ)).toBeNull();
-    await putCachedRoute(kv, REQ, ROUTE);
-    expect(await getCachedRoute(kv, REQ)).toEqual(ROUTE);
+describe('get/put 라운드트립 (DO)', () => {
+  it('put 후 get이 동일 Route를 반환, 예약 카운터는 건드리지 않음', async () => {
+    const storage = new Map<string, unknown>();
+    const ns = fakeQuotaNamespace(storage);
+    expect(await getCachedRoute(ns, REQ)).toBeNull();
+    await putCachedRoute(ns, REQ, ROUTE);
+    expect(await getCachedRoute(ns, REQ)).toEqual(ROUTE);
+    expect(storage.has('usage')).toBe(false);
   });
 
-  it('put은 ROUTE_CACHE_TTL을 적용한다', async () => {
-    const kv = makeKV();
-    await putCachedRoute(kv, REQ, ROUTE);
-    expect(kv.ttls.get(routeCacheKey(REQ))).toBe(ROUTE_CACHE_TTL);
+  it('TTL(15분)이 지나면 미스, put 시 만료 항목을 정리', async () => {
+    const storage = new Map<string, unknown>();
+    let now = 1_000_000;
+    const ns = fakeQuotaNamespace(storage, () => now);
+    await putCachedRoute(ns, REQ, ROUTE);
+    now += ROUTE_CACHE_TTL_MS - 1;
+    expect(await getCachedRoute(ns, REQ)).toEqual(ROUTE);
+    now += 1;
+    expect(await getCachedRoute(ns, REQ)).toBeNull();
+    const other: RouteRequest = { ...REQ, stops: [...REQ.stops].reverse() };
+    await putCachedRoute(ns, other, ROUTE);
+    expect(storage.has(routeCacheKey(REQ))).toBe(false);
+    expect(storage.has(routeCacheKey(other))).toBe(true);
   });
-});
 
-describe('getOrFetchRoute — ODsay 쿼터 방어', () => {
-  it('캐시 미스면 fetcher 실행 + 저장', async () => {
-    const kv = makeKV();
-    const fetcher = vi.fn(async () => ROUTE);
-    const out = await getOrFetchRoute(kv, REQ, fetcher);
-    expect(out).toEqual(ROUTE);
-    expect(fetcher).toHaveBeenCalledTimes(1);
+  it('바인딩 없음 → 미스, put은 조용히 무시', async () => {
+    expect(await getCachedRoute(undefined, REQ)).toBeNull();
+    await expect(putCachedRoute(undefined, REQ, ROUTE)).resolves.toBeUndefined();
   });
 
-  it('캐시 히트면 fetcher 미실행 (실 ODsay 호출 0)', async () => {
-    const kv = makeKV();
-    await putCachedRoute(kv, REQ, ROUTE);
-    const fetcher = vi.fn(async () => ROUTE);
-    const out = await getOrFetchRoute(kv, REQ, fetcher);
-    expect(out).toEqual(ROUTE);
-    expect(fetcher).not.toHaveBeenCalled();
+  it('DO는 알 수 없는 경로·프리픽스 밖 키를 거부한다 (예약 없음)', async () => {
+    const storage = new Map<string, unknown>();
+    const stub = fakeQuotaNamespace(storage).get({} as DurableObjectId);
+    expect((await stub.fetch('https://quota/other', { method: 'POST' })).status).toBe(404);
+    expect((await stub.fetch('https://quota/route?key=usage', { method: 'PUT', body: '{}' })).status).toBe(400);
+    expect(storage.size).toBe(0);
   });
 });

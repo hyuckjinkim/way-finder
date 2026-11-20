@@ -5,7 +5,8 @@
  * 따라서 `<script>`를 런타임에 주입해 로드한다(appkey는 env 경유, 키 없으면 거부).
  *
  * - `autoload=false`로 받아 `kakao.maps.load(cb)`로 명시적 초기화한다.
- * - 한 번 로드되면 캐시된 Promise를 재사용한다(중복 주입 방지).
+ * - 한 번 로드되면 캐시된 Promise를 재사용한다(중복 주입 방지). 실패·타임아웃이면 비워 다음 호출이 재시도.
+ * - 전체(선로드 대기·스크립트·`kakao.maps.load`)를 SDK_LOAD_TIMEOUT_MS로 끊는다 — 호출부가 MapLibre로 폴백.
  * - 키가 없으면 reject — 호출부(MapView.kakao.web)가 placeholder를 렌더한다.
  *
  * 이 모듈은 **웹에서만** import된다(네이티브는 SDK가 다름). 브라우저 전역(document/window)
@@ -121,8 +122,10 @@ const SDK_BASE = 'https://dapi.kakao.com/v2/maps/sdk.js';
 
 /** app/+html.tsx가 선로드하는 SDK 스크립트 태그 id (있으면 재사용). */
 export const KAKAO_SDK_TAG_ID = 'kakao-sdk';
-// 선로드 태그가 이 시간 안에 load되지 않으면 직접 주입으로 폴백.
-const EARLY_TAG_TIMEOUT_MS = 10_000;
+// 선로드 태그가 이 시간 안에 load되지 않으면 직접 주입으로 폴백 (전체 타임아웃 안에서 재시도할 여유).
+const EARLY_TAG_TIMEOUT_MS = 4_000;
+/** 로드 전체 상한 — 넘으면 reject(호출부는 MapLibre 웹 렌더러로 전환). */
+export const SDK_LOAD_TIMEOUT_MS = 8_000;
 
 /** SDK URL — +html.tsx 선로드와 동적 주입이 항상 같은 URL을 쓰도록 단일화. */
 export function kakaoSdkUrl(appKey: string): string {
@@ -156,7 +159,7 @@ export function loadKakaoSdk(appKey: string): Promise<KakaoMapsNamespace> {
     return sdkPromise;
   }
 
-  sdkPromise = new Promise<KakaoMapsNamespace>((resolve, reject) => {
+  const load = new Promise<KakaoMapsNamespace>((resolve, reject) => {
     if (typeof document === 'undefined') {
       reject(new Error('Kakao SDK는 브라우저 환경에서만 로드 가능'));
       return;
@@ -176,10 +179,7 @@ export function loadKakaoSdk(appKey: string): Promise<KakaoMapsNamespace> {
       script.src = kakaoSdkUrl(appKey);
       script.async = true;
       script.onload = onScriptLoaded;
-      script.onerror = () => {
-        sdkPromise = null;
-        reject(new Error('Kakao SDK 스크립트 로드 실패'));
-      };
+      script.onerror = () => reject(new Error('Kakao SDK 스크립트 로드 실패'));
       document.head.appendChild(script);
     };
 
@@ -206,5 +206,15 @@ export function loadKakaoSdk(appKey: string): Promise<KakaoMapsNamespace> {
     early.addEventListener('error', () => settle(inject));
   });
 
-  return sdkPromise;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('Kakao SDK 로드 타임아웃')), SDK_LOAD_TIMEOUT_MS);
+  });
+  const p = Promise.race([load, timeout]).finally(() => clearTimeout(timer));
+  sdkPromise = p;
+  // 실패하면 캐시를 비워 다음 마운트가 다시 시도한다(영구 실패 고착 방지).
+  p.catch(() => {
+    if (sdkPromise === p) sdkPromise = null;
+  });
+  return p;
 }

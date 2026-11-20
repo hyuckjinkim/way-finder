@@ -131,8 +131,11 @@ export async function handlePlaceDetail(c: Context<{ Bindings: Env }>): Promise<
   if (colonIdx === -1) {
     return c.json({ error: 'Invalid id format. Expected "kakao:<id>" or "google:<id>"' }, 400);
   }
-  const provider = rawId.slice(0, colonIdx) as 'kakao' | 'kakao-addr' | 'google';
+  const provider = rawId.slice(0, colonIdx);
   const nativeId = rawId.slice(colonIdx + 1);
+  if (provider !== 'kakao' && provider !== 'kakao-addr' && provider !== 'google') {
+    return c.json({ error: `Unknown provider "${provider}". Expected kakao | kakao-addr | google` }, 400);
+  }
 
   // 기본 장소 정보 (캐시: 24h)
   let base: PlaceDetail;
@@ -166,17 +169,24 @@ export async function handlePlaceDetail(c: Context<{ Bindings: Env }>): Promise<
     if (!doc) return c.json({ error: 'Place not found' }, 404);
     base = normalizeKakaoPlaceDetail(doc);
   } else {
-    // google provider: 기본정보만 구성 (구글 평점·리뷰는 /google 라우트에서 lazy 조회)
+    // google provider: 상세 호출(과금) 없이 검색 힌트로 기본정보 구성 — 구글 평점·리뷰는 /google 라우트에서 lazy.
+    // 힌트가 없으면 이름·좌표를 알 수 없다(예전엔 {0,0}·raw id를 이름으로 내보냄) → 404
+    // (힌트 없는 카카오와 같은 결과 — 클라이언트는 404를 재시도하지 않는다).
+    if (!hint) {
+      return c.json({ error: 'Place not found (google detail needs the name/lat/lng hint)' }, 404);
+    }
     base = {
       id: rawId,
-      name: nativeId,
-      coord: { lat: 0, lng: 0 },
+      name: hint.name,
+      coord: { lat: hint.lat, lng: hint.lng },
       category: 'Place',
       address: '',
       reviews: [],
       rating: undefined,
       blogs: { naver: [], kakao: [] },
-      links: { googleMaps: `https://maps.google.com/?cid=${nativeId}` },
+      links: {
+        googleMaps: `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(nativeId)}`,
+      },
     };
   }
 

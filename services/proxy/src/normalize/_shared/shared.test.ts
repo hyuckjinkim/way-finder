@@ -8,6 +8,9 @@ import { encode } from '@googlemaps/polyline-codec';
 import { parseDurationSec } from './duration.js';
 import { decodePolyline } from './polyline.js';
 import { flatPairsToCoords, pairsToCoords } from './coords.js';
+import { stripHtml } from './html.js';
+import { normalizeKakaoBlogDocument } from '../kakaoBlog.js';
+import { normalizeNaverBlogItem } from '../naverBlog.js';
 
 describe('parseDurationSec', () => {
   it('정수 초 문자열 → 초', () => {
@@ -85,5 +88,28 @@ describe('coords 매퍼', () => {
     ]);
     expect(pairsToCoords([[126.97]])).toEqual([]);
     expect(pairsToCoords([])).toEqual([]);
+  });
+});
+
+describe('stripHtml — 블로그 <b> 제거 + 엔티티 디코드', () => {
+  it.each([
+    ['<b>맛집</b> &#34;강남&#34;', '맛집 "강남"'],
+    ['it&#x27;s &#39;ok&#39;', "it's 'ok'"],
+    ['A&amp;B &lt;tag&gt; &quot;q&quot; &apos;a&apos;', 'A&B <tag> "q" \'a\''],
+    ['카페&middot;베이커리&hellip;', '카페·베이커리…'],
+    ['&amp;lt; 이중 디코드 금지', '&lt; 이중 디코드 금지'],
+    ['&unknown; &#0; &#x110000;', '&unknown; &#0; &#x110000;'],
+  ])('%s', (input, out) => {
+    expect(stripHtml(input)).toBe(out);
+  });
+
+  it('카카오·네이버 정규화가 공용 디코더를 쓴다', () => {
+    const k = normalizeKakaoBlogDocument({
+      title: '<b>강남</b>&#x27;s', contents: '&#34;x&#34;', url: 'u', blogname: 'b', thumbnail: '', datetime: '2026-04-30T00:00:00.000+09:00',
+    });
+    const n = normalizeNaverBlogItem({
+      title: '<b>강남</b>&#39;s', link: 'u', description: '&#34;x&#34;', bloggername: 'b', bloggerlink: '', postdate: '20260430',
+    });
+    expect([k.title, k.snippet, n.title, n.snippet]).toEqual(["강남's", '"x"', "강남's", '"x"']);
   });
 });

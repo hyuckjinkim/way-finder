@@ -114,8 +114,11 @@ export async function handlePlaceGoogle(c: Context<{ Bindings: Env }>): Promise<
   if (colonIdx === -1) {
     return c.json({ error: 'Invalid id format. Expected "kakao:<id>" or "google:<id>"' }, 400);
   }
-  const provider = rawId.slice(0, colonIdx) as 'kakao' | 'kakao-addr' | 'google';
+  const provider = rawId.slice(0, colonIdx);
   const nativeId = rawId.slice(colonIdx + 1);
+  if (provider !== 'kakao' && provider !== 'kakao-addr' && provider !== 'google') {
+    return c.json({ error: `Unknown provider "${provider}". Expected kakao | kakao-addr | google` }, 400);
+  }
 
   // 주소 결과는 구글 장소가 아니다 — 구글 탭 비움.
   if (provider === 'kakao-addr') {

@@ -8,6 +8,7 @@
  * - blogname이 저자명
  */
 import type { BlogPost } from '@wayfinder/shared';
+import { stripHtml } from './_shared/html.js';
 
 /** 카카오 블로그 문서 원시 타입 */
 export interface KakaoBlogDocument {
@@ -23,18 +24,6 @@ export interface KakaoBlogDocument {
 export interface KakaoBlogResponse {
   meta: { total_count: number; pageable_count: number; is_end: boolean };
   documents: KakaoBlogDocument[];
-}
-
-/** HTML 태그 제거 */
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
 }
 
 /** ISO 8601 datetime → "YYYY-MM-DD" (날짜 부분만) */

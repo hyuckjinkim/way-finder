@@ -7,6 +7,7 @@
  * - bloggername이 저자명
  */
 import type { BlogPost } from '@wayfinder/shared';
+import { stripHtml } from './_shared/html.js';
 
 /** 네이버 블로그 검색 아이템 원시 타입 */
 export interface NaverBlogItem {
@@ -25,18 +26,6 @@ export interface NaverBlogResponse {
   start: number;
   display: number;
   items: NaverBlogItem[];
-}
-
-/** HTML 태그 제거 (단순 정규식 — <b>, </b>, HTML 엔티티 기본 처리) */
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, '')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .trim();
 }
 
 /** "YYYYMMDD" → "YYYY-MM-DD" */

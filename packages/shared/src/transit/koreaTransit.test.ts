@@ -142,6 +142,10 @@ describe('koreaTransitRoute', () => {
     [{ error: [{ code: '429', message: 'Daily quota exceeded' }] }, 'quota'],
     [{ error: { code: '-98', msg: '출, 도착지가 700m이내입니다.' } }, 'too_close'],
     [{ error: { code: '-99', msg: '검색결과가 없습니다.' } }, 'no_route'],
+    [{ error: { code: '3', msg: '출발지 정류장이 없습니다.' } }, 'no_route'],
+    [{ error: { code: '4', msg: '도착지 정류장이 없습니다.' } }, 'no_route'],
+    [{ error: { code: 5, msg: '출, 도착지 정류장이 없습니다.' } }, 'no_route'],
+    [{ error: [{ code: '6', message: '서비스 지역이 아닙니다.' }] }, 'no_route'],
     [{ error: { code: '-8', msg: '필수 입력값 형식 및 범위 오류' } }, 'upstream'],
     [{ result: {} }, 'upstream'],
   ])('ODsay error body %j -> TransitError %s', async (body, code) => {

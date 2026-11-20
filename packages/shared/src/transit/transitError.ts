@@ -29,7 +29,8 @@ export function transitErrorCode(err: unknown): TransitErrorCode | undefined {
 
 /**
  * ODsay 에러 본문(HTTP 200 + `{error:[{code,message}]}` 또는 `{error:{code,msg}}`) → 코드.
- * 확인된 것은 `[ApiKeyAuthFailed]`(실측)뿐. -98(출·도착 700m 이내)·-99(검색결과 없음)는 ODsay 문서 기준,
+ * 확인된 것은 `[ApiKeyAuthFailed]`(실측)뿐. 나머지는 ODsay 문서(lab.odsay.com searchPubTransPathT 에러 코드) 기준:
+ * -98 출·도착 700m 이내, -99 검색결과 없음, 3/4/5 출발·도착 정류장 없음, 6 서비스 지역 아님 → 재시도·폴백 무의미.
  * quota 본문은 미문서화(429 "Daily quota exceeded" 추정). 모르는 건 upstream — 프록시(카카오) 폴백을 막지 않도록.
  */
 export function classifyOdsayError(error: unknown): TransitErrorCode {
@@ -38,7 +39,7 @@ export function classifyOdsayError(error: unknown): TransitErrorCode {
   const msg = String(e?.message ?? e?.msg ?? '');
   if (code === '429' || /quota/i.test(msg)) return 'quota';
   if (code === '-98') return 'too_close';
-  if (code === '-99') return 'no_route';
+  if (['-99', '3', '4', '5', '6'].includes(code)) return 'no_route';
   if (/ApiKeyAuthFailed/i.test(msg)) return 'auth';
   return 'upstream';
 }

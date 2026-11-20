@@ -3,7 +3,8 @@
  *
  * Kakao Maps JS SDK를 동적 주입(loadKakaoSdk)으로 로드해 지도를 렌더한다.
  * `MapViewProps`/`MapViewRef` 계약을 만족한다(flyTo=panTo, fitBounds=setBounds).
- * 키 미설정/로드 실패 시 안내 placeholder를 렌더한다(데모 모드).
+ * 키 미설정/로드 실패(타임아웃 포함) 시 `onUnavailable`을 호출한다 — 웹 디스패처가 MapLibre로 전환.
+ * 핸들러가 없으면 안내 placeholder를 렌더한다.
  *
  * 웹 번들 격리(B4): 네이티브 맵 모듈(@react-native-kakao/map)을 import하지 않는다.
  */
@@ -66,9 +67,12 @@ function readKakaoJsKey(): string {
   return extra?.kakaoJsKey ?? '';
 }
 
-const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewProps>(
+/** 웹 디스패처 전용 확장 — 공용 MapViewProps는 건드리지 않는다. */
+export type MapViewKakaoWebProps = MapViewProps & { onUnavailable?: () => void };
+
+const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewKakaoWebProps>(
   function MapViewKakaoWeb(props, ref) {
-    const { camera, markers, polylines, userLocation, fitTo, onPress, onCameraChange } = props;
+    const { camera, markers, polylines, userLocation, fitTo, onPress, onCameraChange, onUnavailable } = props;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const kakaoRef = useRef<KakaoMapsNamespace | null>(null);
     const mapRef = useRef<KakaoMapInstance | null>(null);
@@ -243,6 +247,13 @@ const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewProps>(
       else flyMap(kakao, map, pending.center, pending.zoom);
     }, [status]);
 
+    // 카카오를 못 쓰면 상위(웹 디스패처)에 알려 다른 렌더러로 전환시킨다.
+    const unavailable = status === 'no-key' || status === 'error';
+    useEffect(() => {
+      if (unavailable) onUnavailable?.();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [unavailable]);
+
     // 언마운트 정리.
     useEffect(
       () => () => {
@@ -253,7 +264,7 @@ const MapViewKakaoWeb = forwardRef<MapViewRef, MapViewProps>(
       [],
     );
 
-    if (status === 'no-key' || status === 'error') {
+    if (unavailable) {
       return (
         <View style={styles.placeholder}>
           <Text style={styles.label}>

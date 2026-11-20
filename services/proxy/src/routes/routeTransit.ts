@@ -27,7 +27,12 @@ import {
   normalizeGoogleTransit,
   type GoogleRoutesResponse,
 } from '../normalize/googleTransit.js';
-import { buildTransitRoute, isIntercity } from '@wayfinder/shared/transit';
+import {
+  buildTransitRoute,
+  isIntercity,
+  TransitError,
+  type TransitErrorCode,
+} from '@wayfinder/shared/transit';
 import {
   kakaoRouteToRoute,
   normalizeKakaoTransit,
@@ -42,30 +47,34 @@ const GOOGLE_ROUTES_URL = 'https://routes.googleapis.com/directions/v2:computeRo
 const KAKAO_TRANSIT_URL = 'https://dapi.kakao.com/v2/routing/publictraffic';
 /** 이보다 가까운 구간은 대중교통 대신 도보 권유 (ODsay -98 기준과 동일). 카카오는 NO_RESULTS만 줘서 여기서 판정. */
 const TOO_CLOSE_M = 700;
+/**
+ * kr 대중교통 요청 전체 마감 — 캐시·예약 DO 왕복을 포함해 이 시각에 카카오 호출을 모두 끊는다.
+ * 클라이언트 apiClient 타임아웃(10s)보다 짧아야 클라이언트가 먼저 포기·재시도해 이중 예약하지 않는다.
+ */
+const KR_TRANSIT_DEADLINE_MS = 8000;
 
-export type TransitErrorCode = 'quota' | 'no_route' | 'too_close' | 'upstream';
 const STATUS: Record<TransitErrorCode, 429 | 422 | 502> = {
   quota: 429,
   no_route: 422,
   too_close: 422,
+  auth: 502,
   upstream: 502,
 };
 
-class TransitError extends Error {
-  constructor(readonly code: TransitErrorCode, message: string) {
-    super(message);
-  }
-}
-
 /** 카카오 대중교통 1구간. 쿼터 초과(429·code -10)·경로 없음·그 외 실패를 타입 에러로. */
-async function fetchKakaoSegment(from: LatLng, to: LatLng, key: string): Promise<KakaoTransitResponse> {
+async function fetchKakaoSegment(
+  from: LatLng,
+  to: LatLng,
+  key: string,
+  signal: AbortSignal,
+): Promise<KakaoTransitResponse> {
   const url = new URL(KAKAO_TRANSIT_URL);
   url.searchParams.set('start_x', String(from.lng));
   url.searchParams.set('start_y', String(from.lat));
   url.searchParams.set('end_x', String(to.lng));
   url.searchParams.set('end_y', String(to.lat));
   const res = await fetch(url.toString(), {
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    signal,
     headers: { Authorization: `KakaoAK ${key}` },
   });
   const body = (await res.json().catch(() => ({}))) as KakaoTransitResponse & {
@@ -88,9 +97,10 @@ async function fetchKakaoSegment(from: LatLng, to: LatLng, key: string): Promise
 /**
  * 국내 대중교통 — 카카오. 순서: 시외/근거리 판정 → 캐시 → 쿼터 예약 → 호출 → 캐시 저장.
  * 판정·캐시 히트는 카카오 카운터를 소비하지 않는다.
- * 2지점: 주 경로 + 대안. 경유지: 구간별 주 경로를 잇고 구간 사이에만 환승 버퍼.
+ * 2지점: 주 경로 + 대안. 경유지: 구간을 병렬 호출(전부-또는-0 예약 뒤)해 주 경로를 잇고 구간 사이에만 환승 버퍼.
  */
 async function krTransit(c: Context<{ Bindings: Env }>, req: RouteRequest): Promise<Route> {
+  const deadline = AbortSignal.timeout(KR_TRANSIT_DEADLINE_MS);
   const { stops } = req;
   // ponytail: 카카오는 시내 대중교통만(서울→부산 실측 NO_RESULTS) — 호출 전에 걸러 쿼터 절약.
   if (isIntercity(stops)) throw new TransitError('no_route', 'intercity transit not supported');
@@ -100,7 +110,7 @@ async function krTransit(c: Context<{ Bindings: Env }>, req: RouteRequest): Prom
     }
   }
 
-  const cached = await getCachedRoute(c.env.CACHE, req);
+  const cached = await getCachedRoute(c.env.KAKAO_TRANSIT_QUOTA, req);
   if (cached) return cached;
 
   const segments = stops.length - 1;
@@ -108,20 +118,20 @@ async function krTransit(c: Context<{ Bindings: Env }>, req: RouteRequest): Prom
     throw new TransitError('quota', 'daily transit quota reached');
   }
 
+  const raws = await Promise.all(
+    stops.slice(1).map((to, i) => fetchKakaoSegment(stops[i]!, to, c.env.KAKAO_REST_KEY, deadline)),
+  );
   let route: Route;
   if (segments === 1) {
-    const raw = await fetchKakaoSegment(stops[0]!, stops[1]!, c.env.KAKAO_REST_KEY);
-    const r = normalizeKakaoTransit(raw, stops[0]!, stops[1]!);
+    const r = normalizeKakaoTransit(raws[0]!, stops[0]!, stops[1]!);
     if (!r) throw new TransitError('no_route', 'no transit route');
     route = r;
   } else {
-    const parts: Route[] = [];
-    for (let i = 0; i < segments; i++) {
-      const raw = await fetchKakaoSegment(stops[i]!, stops[i + 1]!, c.env.KAKAO_REST_KEY);
+    const parts = raws.map((raw, i) => {
       const first = raw.routes?.[0];
       if (!first) throw new TransitError('no_route', 'no transit route');
-      parts.push(kakaoRouteToRoute(first, stops[i]!, stops[i + 1]!));
-    }
+      return kakaoRouteToRoute(first, stops[i]!, stops[i + 1]!);
+    });
     const fares = parts.map((p) => p.fare);
     route = {
       legs: parts.flatMap((p) => p.legs),
@@ -131,7 +141,7 @@ async function krTransit(c: Context<{ Bindings: Env }>, req: RouteRequest): Prom
       ...(fares.every((f) => f !== undefined) ? { fare: fares.reduce((a, f) => a + f!, 0) } : {}),
     };
   }
-  await putCachedRoute(c.env.CACHE, req, route, deferFrom(c));
+  await putCachedRoute(c.env.KAKAO_TRANSIT_QUOTA, req, route, deferFrom(c));
   return route;
 }
 
