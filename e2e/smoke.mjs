@@ -12,6 +12,7 @@ mkdirSync(OUT, { recursive: true });
 const LIVE = process.env.LIVE_TRANSIT === '1';
 const ODSAY_CITY = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures/odsay-city.json'), 'utf8');
 const FIXTURE_MIN = JSON.parse(ODSAY_CITY).result.path[0].info.totalTime;
+const KAKAO_ROUTE = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'fixtures/kakao-proxy-route.json'), 'utf8');
 
 const browser = await chromium.launch({
   // PW_CHROMIUM overrides; default = playwright's own browser, else the cached chromium-1228
@@ -247,6 +248,19 @@ await check('8 phone: /place peek sheet, dragging the map above the sheet moves 
   await touchDrag(page, 195, 300, -100, 150);
   assert((await mapSig(page)) !== before, 'map did not move when dragged above the place sheet');
 }, PIXEL7);
+
+// ODsay free tier = 30/day, so most users get the proxy's Kakao backup. Fixture = a real proxy
+// response recorded 2026-11-21 (구디→강남). Page-level routes take precedence over newPage's.
+if (LIVE) skip('9 ODsay quota -> Kakao backup', 'LIVE_TRANSIT=1');
+else await check('9 ODsay quota exceeded -> Kakao backup route renders (no error)', async (page) => {
+  await page.route(/api\.odsay\.com\//, (r) => r.fulfill(json('{"error":[{"code":"429","message":"Daily quota exceeded"}]}')));
+  await page.route('**/v1/routes', (r) => r.fulfill(json(KAKAO_ROUTE)));
+  await page.goto(`${BASE}/route/result?o=37.485261,126.901473,구로디지털단지역&d=37.498086,127.028001,강남역&mode=transit`, { waitUntil: 'load' });
+  await page.getByText('2호선').first().waitFor({ timeout: 15000 });
+  const t = await text(page);
+  assert(!/찾지 못했어요|쉬고 있어요|다시 시도/.test(t), 'error copy shown although the backup succeeded');
+  assert((await polylines(page)) >= 1, '0 rendered polylines for the Kakao route');
+});
 
 // timing: LCP of a cold home load
 {
