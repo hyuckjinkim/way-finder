@@ -39,6 +39,14 @@ export interface MapPolyline {
   dashed?: boolean;
 }
 
+/** 지도 레이어 토글 (F7). 카카오 웹만 반영, 다른 렌더러는 무시. */
+export interface MapLayers {
+  traffic?: boolean;
+  /** 위성(스카이뷰+라벨). */
+  satellite?: boolean;
+  bicycle?: boolean;
+}
+
 /** <MapView> props (§5). */
 export interface MapViewProps {
   camera: CameraState;
@@ -52,6 +60,13 @@ export interface MapViewProps {
   fitTo?: { bounds: BBox; padding?: number | Insets };
   onPress?: (coord: LatLng) => void;
   onCameraChange?: (camera: CameraState) => void;
+  /** 길게 누르기(터치 ~500ms)·우클릭 좌표 (F6, 웹 구현만). */
+  onLongPress?: (coord: LatLng) => void;
+  /** 마커 탭 — 마커 id (웹 구현만). */
+  onMarkerPress?: (id: string) => void;
+  /** 이동·줌이 끝날 때 보이는 영역 (웹 구현만) — '이 지역 재검색'용. */
+  onBoundsChange?: (bounds: BBox) => void;
+  layers?: MapLayers;
 }
 
 /** <MapView> 명령형 ref 핸들 (§5). */

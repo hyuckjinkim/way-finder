@@ -50,8 +50,11 @@ const MapView = forwardRef<MapViewRef, MapViewProps>(function MapView(
     [],
   );
 
+  // 전환 때 한 번만 재생하고 비운다 — 남겨 두면 이후 재생이 사용자가 옮긴 지도를 옛 위치로 되돌린다.
   useEffect(() => {
-    if (kakaoFailed && implRef.current) lastCmdRef.current?.(implRef.current);
+    if (!kakaoFailed || !implRef.current) return;
+    lastCmdRef.current?.(implRef.current);
+    lastCmdRef.current = null;
   }, [kakaoFailed]);
 
   return renderer === 'korea' && !kakaoFailed ? (

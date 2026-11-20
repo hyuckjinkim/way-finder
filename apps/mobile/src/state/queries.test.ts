@@ -18,6 +18,8 @@ import {
   searchQueryOptions,
   placeDetailQueryOptions,
   googleDataQueryOptions,
+  categoryQueryOptions,
+  reverseGeocodeQueryOptions,
 } from './queries.js';
 
 describe('queryKeys — 캐시 키 구조', () => {
@@ -126,5 +128,25 @@ describe('shouldRetryPlaceDetail — 404는 재시도하지 않는다', () => {
     expect(shouldRetryPlaceDetail(0, new ApiError(502, 'bad gateway'))).toBe(true);
     expect(shouldRetryPlaceDetail(1, new Error('network'))).toBe(true);
     expect(shouldRetryPlaceDetail(2, new Error('network'))).toBe(false);
+  });
+});
+
+describe('카테고리·역지오코딩 queryOptions (F5·F6)', () => {
+  const bounds = { sw: { lat: 37.55, lng: 126.97 }, ne: { lat: 37.57, lng: 126.99 } };
+
+  it('카테고리는 요청이 있을 때만, 코드·영역별 키', () => {
+    expect(categoryQueryOptions(null).enabled).toBe(false);
+    const a = categoryQueryOptions({ code: 'CE7', bounds });
+    expect(a.enabled).toBe(true);
+    expect(a.queryKey).toEqual(['places', 'category', 'CE7', [37.55, 126.97, 37.57, 126.99]]);
+    expect(categoryQueryOptions({ code: 'PM9', bounds }).queryKey).not.toEqual(a.queryKey);
+  });
+
+  it('역지오코딩은 좌표가 있을 때만, 재시도 없음', () => {
+    expect(reverseGeocodeQueryOptions(null).enabled).toBe(false);
+    const o = reverseGeocodeQueryOptions({ lat: 37.5, lng: 127 });
+    expect(o.enabled).toBe(true);
+    expect(o.retry).toBe(false);
+    expect(o.queryKey).toEqual(['geo', 'reverse', 37.5, 127]);
   });
 });

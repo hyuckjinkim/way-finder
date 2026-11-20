@@ -120,3 +120,27 @@ describe('PlaceService.searchPath — 검색에 위치 실어 보내기', () => 
     expect(searchPath('카페')).toBe('/v1/places/search?q=%EC%B9%B4%ED%8E%98');
   });
 });
+
+describe('PlaceService — 카테고리·역지오코딩 (F5·F6)', () => {
+  it('categoryPath는 rect를 카카오 순서(경도,위도,경도,위도)로, 중심을 x·y로 싣는다', async () => {
+    const { categoryPath } = await import('./PlaceService.js');
+    const url = new URL(
+      categoryPath('CE7', { sw: { lat: 37.55, lng: 126.97 }, ne: { lat: 37.57, lng: 126.99 } }),
+      'http://x',
+    );
+    expect(url.pathname).toBe('/v1/places/category');
+    expect(url.searchParams.get('code')).toBe('CE7');
+    expect(url.searchParams.get('rect')).toBe('126.970000,37.550000,126.990000,37.570000');
+    expect(url.searchParams.get('x')).toBe('126.980000');
+    expect(url.searchParams.get('y')).toBe('37.560000');
+  });
+
+  it('데모 모드: 카테고리는 mock, 역지오코딩은 null — fetch 없음', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { searchCategory, reverseGeocode } = await import('./PlaceService.js');
+    expect(Array.isArray(await searchCategory('CE7', { sw: { lat: 37, lng: 126 }, ne: { lat: 38, lng: 127 } }))).toBe(true);
+    expect(await reverseGeocode({ lat: 37.5, lng: 127 })).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+});

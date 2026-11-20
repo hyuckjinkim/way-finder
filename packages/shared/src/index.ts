@@ -46,6 +46,7 @@ export {
 } from './constants/nav.js';
 export type {
   MapViewProps,
+  MapLayers,
   MapViewRef,
   Insets,
   MapMarker,

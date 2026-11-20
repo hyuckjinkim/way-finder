@@ -43,9 +43,12 @@ export interface KakaoMapsNamespace {
       zIndex?: number;
       map?: KakaoMapInstance;
     }) => KakaoOverlay;
+    Point: new (x: number, y: number) => KakaoPoint;
+    /** 베이스(ROADMAP·HYBRID)·오버레이(TRAFFIC·BICYCLE…) 타입 상수. */
+    MapTypeId: Record<'ROADMAP' | 'HYBRID' | 'TRAFFIC' | 'BICYCLE' | 'BICYCLE_HYBRID', number>;
     event: {
       addListener(
-        target: KakaoMapInstance,
+        target: KakaoMapInstance | KakaoMarker,
         type: string,
         handler: (event: KakaoMouseEvent) => void,
       ): void;
@@ -65,7 +68,12 @@ export interface KakaoLatLng {
 
 export interface KakaoLatLngBounds {
   extend(latlng: KakaoLatLng): void;
+  getSouthWest(): KakaoLatLng;
+  getNorthEast(): KakaoLatLng;
 }
+
+/** 컨테이너 픽셀 좌표. */
+export type KakaoPoint = object;
 
 export interface KakaoMapOptions {
   center: KakaoLatLng;
@@ -90,6 +98,11 @@ export interface KakaoMapInstance {
     paddingLeft?: number,
   ): void;
   relayout(): void;
+  getBounds(): KakaoLatLngBounds;
+  getProjection(): { coordsFromContainerPoint(point: KakaoPoint): KakaoLatLng };
+  setMapTypeId(id: number): void;
+  addOverlayMapTypeId(id: number): void;
+  removeOverlayMapTypeId(id: number): void;
 }
 
 export interface KakaoMarker {
@@ -122,6 +135,8 @@ const SDK_BASE = 'https://dapi.kakao.com/v2/maps/sdk.js';
 
 /** app/+html.tsx가 선로드하는 SDK 스크립트 태그 id (있으면 재사용). */
 export const KAKAO_SDK_TAG_ID = 'kakao-sdk';
+/** 선로드가 없거나 실패했을 때 직접 주입한 태그 id — 타임아웃 뒤 재시도가 2번째 태그를 만들지 않게. */
+export const KAKAO_SDK_INJECTED_ID = 'kakao-sdk-injected';
 // 선로드 태그가 이 시간 안에 load되지 않으면 직접 주입으로 폴백 (전체 타임아웃 안에서 재시도할 여유).
 const EARLY_TAG_TIMEOUT_MS = 4_000;
 /** 로드 전체 상한 — 넘으면 reject(호출부는 MapLibre 웹 렌더러로 전환). */
@@ -168,30 +183,45 @@ export function loadKakaoSdk(appKey: string): Promise<KakaoMapsNamespace> {
     const onScriptLoaded = () => {
       const kakao = getKakaoGlobal();
       if (!kakao) {
+        document.getElementById(KAKAO_SDK_INJECTED_ID)?.remove(); // 다음 시도가 이 태그를 8초 기다리지 않게
         reject(new Error('Kakao SDK 로드 후 전역(kakao) 부재'));
         return;
       }
       kakao.maps.load(() => resolve(kakao));
     };
 
+    const onScriptError = () => reject(new Error('Kakao SDK 스크립트 로드 실패'));
+
+    // 스크립트가 이미 돌았으면(타임아웃 뒤 재시도 등) 태그를 더 만들지 않고 maps.load만 다시.
+    if (getKakaoGlobal()) {
+      onScriptLoaded();
+      return;
+    }
+
     const inject = () => {
+      // 이전 시도가 주입한 태그가 아직 로딩 중이면 그걸 기다린다(실패한 태그는 onerror에서 지워짐).
+      const pending = document.getElementById(KAKAO_SDK_INJECTED_ID);
+      if (pending) {
+        pending.addEventListener('load', onScriptLoaded);
+        pending.addEventListener('error', onScriptError);
+        return;
+      }
       const script = document.createElement('script');
+      script.id = KAKAO_SDK_INJECTED_ID;
       script.src = kakaoSdkUrl(appKey);
       script.async = true;
       script.onload = onScriptLoaded;
-      script.onerror = () => reject(new Error('Kakao SDK 스크립트 로드 실패'));
+      script.onerror = () => {
+        script.remove();
+        onScriptError();
+      };
       document.head.appendChild(script);
     };
 
-    // +html.tsx 선로드 태그가 있으면 재사용: 이미 로드됐으면 즉시, 아니면 load 대기.
-    // 에러·타임아웃이면 직접 주입(중복 호출은 settled 가드).
+    // +html.tsx 선로드 태그가 있으면 load 대기. 에러·타임아웃이면 직접 주입(중복 호출은 settled 가드).
     const early = document.getElementById(KAKAO_SDK_TAG_ID);
     if (!early) {
       inject();
-      return;
-    }
-    if (getKakaoGlobal()) {
-      onScriptLoaded();
       return;
     }
     let settled = false;

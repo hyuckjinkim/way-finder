@@ -113,3 +113,16 @@ export function approxZoomForBounds(bounds: BBox): number {
   const zoom = Math.floor(Math.log2((360 * 360) / (256 * span)));
   return Math.min(19, Math.max(1, zoom));
 }
+
+/**
+ * '이 지역 재검색'을 띄울 만큼 지도가 움직였나 — 중심이 검색 영역의 1/4 이상 이동했거나 줌(가로 폭)이 바뀜.
+ * 세로 폭은 보지 않는다: 폰에서 결과 목록이 열리면 지도 높이만 줄어 영역이 바뀌지만 사용자가 옮긴 건 아니다.
+ */
+export function boundsMoved(searched: BBox, now: BBox): boolean {
+  const latSpan = searched.ne.lat - searched.sw.lat;
+  const lngSpan = searched.ne.lng - searched.sw.lng;
+  const dLat = Math.abs((now.ne.lat + now.sw.lat) / 2 - (searched.ne.lat + searched.sw.lat) / 2);
+  const dLng = Math.abs((now.ne.lng + now.sw.lng) / 2 - (searched.ne.lng + searched.sw.lng) / 2);
+  const widthRatio = (now.ne.lng - now.sw.lng) / lngSpan;
+  return dLat > latSpan / 4 || dLng > lngSpan / 4 || widthRatio < 0.8 || widthRatio > 1.25;
+}

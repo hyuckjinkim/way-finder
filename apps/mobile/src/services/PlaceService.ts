@@ -12,8 +12,18 @@
  *   getGoogleData → 구글 평점·리뷰만 (구글 탭 활성화 시 단독 호출)
  * 이렇게 분리해야 §11 과금 방어선(구글 탭 열기 전 구글 호출 없음)이 서비스 레이어에서 보장된다.
  */
-import type { LatLng, Place, PlaceDetail, Rating, Review } from '@wayfinder/shared';
-import { placesSearchPath, placeDetailPath, placeGooglePath, type PlaceHint } from '@wayfinder/shared/api';
+import type { BBox, LatLng, Place, PlaceDetail, Rating, Review } from '@wayfinder/shared';
+import {
+  placesSearchPath,
+  placesCategoryPath,
+  geoReversePath,
+  placeDetailPath,
+  placeGooglePath,
+  PLACE_CATEGORY_CODES,
+  type PlaceCategoryCode,
+  type PlaceHint,
+  type ReverseGeocode,
+} from '@wayfinder/shared/api';
 import { mockPlaceProvider } from '@wayfinder/shared/mocks';
 import { apiFetch, isDemoMode } from './apiClient.js';
 
@@ -63,4 +73,33 @@ export async function getGoogleData(id: string): Promise<GooglePlaceData> {
   }
   const data = await apiFetch(placeGooglePath(id));
   return data as GooglePlaceData;
+}
+
+const fix6 = (v: number): string => v.toFixed(6);
+
+/** 카테고리 검색 경로 — 보이는 지도 영역(rect, 카카오 x=경도 순서) + 중심(거리값용). */
+export function categoryPath(code: PlaceCategoryCode, bounds: BBox): string {
+  const { sw, ne } = bounds;
+  const qs = new URLSearchParams({
+    code,
+    rect: [sw.lng, sw.lat, ne.lng, ne.lat].map(fix6).join(','),
+    x: fix6((sw.lng + ne.lng) / 2),
+    y: fix6((sw.lat + ne.lat) / 2),
+  });
+  return `${placesCategoryPath}?${qs}`;
+}
+
+/** 지도 영역 안의 카테고리 장소(최대 15). */
+export async function searchCategory(code: PlaceCategoryCode, bounds: BBox): Promise<Place[]> {
+  if (isDemoMode) {
+    return mockPlaceProvider.search(PLACE_CATEGORY_CODES[code]);
+  }
+  return (await apiFetch(categoryPath(code, bounds))) as Place[];
+}
+
+/** 좌표 → 주소 라벨(없으면 null). */
+export async function reverseGeocode(coord: LatLng): Promise<string | null> {
+  if (isDemoMode) return null;
+  const data = (await apiFetch(`${geoReversePath}?lat=${fix6(coord.lat)}&lng=${fix6(coord.lng)}`)) as ReverseGeocode;
+  return data.label;
 }

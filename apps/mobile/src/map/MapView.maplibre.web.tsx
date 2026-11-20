@@ -2,7 +2,7 @@
  * MapLibre MapView — 웹 구현 (B3).
  *
  * `maplibre-gl`로 글로벌 지도를 렌더한다. 무료 OpenFreeMap liberty 스타일 사용(키 0개).
- * `MapViewProps`/`MapViewRef` 계약을 만족한다(flyTo, fitBounds).
+ * `MapViewProps`/`MapViewRef` 계약을 만족한다(flyTo, fitBounds). `layers`(카카오 전용 타일)는 무시한다.
  *
  * 웹 번들 격리(B4): 네이티브 모듈(@maplibre/maplibre-react-native)을 import하지 않는다.
  * 좌표 순서 주의: maplibre-gl은 [lng, lat] 순.
@@ -25,6 +25,7 @@ import {
   polylineStyle,
   withUserMarker,
 } from './mapHelpers.js';
+import { attachLongPress, dedupeLongPress } from './longPress.js';
 
 /** 무료 OpenFreeMap liberty 벡터 스타일(키 불요). */
 export const OPENFREEMAP_LIBERTY_STYLE =
@@ -32,7 +33,7 @@ export const OPENFREEMAP_LIBERTY_STYLE =
 
 const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
   function MapViewMapLibreWeb(props, ref) {
-    const { camera, markers, polylines, userLocation, fitTo, onPress, onCameraChange } = props;
+    const { camera, markers, polylines, userLocation, fitTo } = props;
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<MlMap | null>(null);
     const markerObjsRef = useRef<MlMarker[]>([]);
@@ -42,10 +43,8 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
     // 첫 타일이 오기 전(스타일·타일 전부 실패) 에러는 지도가 비어 보이므로 안내. 이후 개별 타일 실패는 로그만.
     const [loadFailed, setLoadFailed] = useState(false);
 
-    const onPressRef = useRef(onPress);
-    const onCameraChangeRef = useRef(onCameraChange);
-    onPressRef.current = onPress;
-    onCameraChangeRef.current = onCameraChange;
+    const propsRef = useRef(props);
+    propsRef.current = props;
 
     useImperativeHandle(
       ref,
@@ -93,17 +92,35 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
         if (!gotTile) setLoadFailed(true);
       });
       map.on('click', (e) => {
-        onPressRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        propsRef.current.onPress?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
       });
-      map.on('moveend', () => {
+      // 길게 누르기(F6): 우클릭(contextmenu) + 터치 500ms. 지도 이동이 시작되면 취소.
+      const longPress = dedupeLongPress((ll: { lat: number; lng: number }) =>
+        propsRef.current.onLongPress?.({ lat: ll.lat, lng: ll.lng }),
+      );
+      map.on('contextmenu', (e) => {
+        e.preventDefault();
+        longPress(e.lngLat);
+      });
+      const touchPress = attachLongPress(containerRef.current, (x, y) => longPress(map.unproject([x, y])));
+      map.on('movestart', touchPress.cancel);
+      const emitCamera = () => {
         const c = map.getCenter();
-        onCameraChangeRef.current?.({
+        propsRef.current.onCameraChange?.({
           center: { lat: c.lat, lng: c.lng },
           zoom: map.getZoom(),
         });
-      });
+        const b = map.getBounds();
+        propsRef.current.onBoundsChange?.({
+          sw: { lat: b.getSouth(), lng: b.getWest() },
+          ne: { lat: b.getNorth(), lng: b.getEast() },
+        });
+      };
+      map.on('moveend', emitCamera);
+      map.on('load', emitCamera);
 
       return () => {
+        touchPress.detach();
         map.remove();
         mapRef.current = null;
       };
@@ -135,6 +152,10 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
         } else {
           marker = new maplibregl.Marker();
         }
+        marker.getElement().addEventListener('click', (e) => {
+          e.stopPropagation(); // 지도 click(onPress)으로 새지 않게
+          propsRef.current.onMarkerPress?.(mk.id);
+        });
         return marker.setLngLat([mk.coord.lng, mk.coord.lat]).addTo(map);
       });
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,6 +206,7 @@ const MapViewMapLibreWeb = forwardRef<MapViewRef, MapViewProps>(
     useEffect(() => {
       if (!fitTo) return;
       const { sw, ne } = fitTo.bounds;
+      mapRef.current?.resize(); // 컨테이너 크기가 막 바뀌었어도(폰 시트 여백) 실제 크기로
       mapRef.current?.fitBounds(
         [[sw.lng, sw.lat], [ne.lng, ne.lat]],
         { padding: normalizeInsets(fitTo.padding), animate: false },

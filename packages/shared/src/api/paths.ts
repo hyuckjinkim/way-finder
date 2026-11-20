@@ -47,3 +47,40 @@ export interface Capabilities {
   /** 도보 선호(걷기 좋은·안전·한적) — Valhalla가 있어야 동작. */
   walkPreferences: boolean;
 }
+
+/**
+ * 카테고리 장소 검색 (F5) — `?code=CE7&rect=minX,minY,maxX,maxY[&x=&y=]` 또는 `?code=CE7&x=&y=&radius=`.
+ * x=경도, y=위도(카카오 순서). 응답은 `Place[]`.
+ */
+export const placesCategoryPath = '/v1/places/category';
+
+/** 카카오 category_group_code → 이름 (공식 18종). 프록시가 이 목록으로 code를 검증한다. */
+export const PLACE_CATEGORY_CODES = {
+  MT1: '대형마트',
+  CS2: '편의점',
+  PS3: '어린이집, 유치원',
+  SC4: '학교',
+  AC5: '학원',
+  PK6: '주차장',
+  OL7: '주유소, 충전소',
+  SW8: '지하철역',
+  BK9: '은행',
+  CT1: '문화시설',
+  AG2: '중개업소',
+  PO3: '공공기관',
+  AT4: '관광명소',
+  AD5: '숙박',
+  FD6: '음식점',
+  CE7: '카페',
+  HP8: '병원',
+  PM9: '약국',
+} as const;
+export type PlaceCategoryCode = keyof typeof PLACE_CATEGORY_CODES;
+
+/** 좌표 → 주소 (F6 길게 누르기) — `?lat=&lng=`. 응답 `ReverseGeocode`. */
+export const geoReversePath = '/v1/geo/reverse';
+
+/** `GET geoReversePath` 응답. 주소가 없으면(바다·해외) label=null. */
+export interface ReverseGeocode {
+  label: string | null;
+}

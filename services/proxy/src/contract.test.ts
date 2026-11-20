@@ -13,6 +13,8 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 import app from './index.js';
 import {
   placesSearchPath,
+  placesCategoryPath,
+  geoReversePath,
   placeDetailPath,
   placeGooglePath,
   blogsPath,
@@ -52,6 +54,8 @@ describe('contract — shared/api 경로가 전부 프록시에 등록됨 (subse
   // app.use('/v1/*')(ALL)·헬스('/') 등 미들웨어/기타 라우트가 포함되므로.
   const expected: Array<{ method: string; path: string }> = [
     { method: 'GET', path: placesSearchPath },
+    { method: 'GET', path: placesCategoryPath },
+    { method: 'GET', path: geoReversePath },
     { method: 'GET', path: blogsPath },
     { method: 'GET', path: placeDetailPath(SENTINEL) },
     { method: 'GET', path: placeGooglePath(SENTINEL) },

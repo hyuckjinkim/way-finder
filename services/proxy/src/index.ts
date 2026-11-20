@@ -3,6 +3,8 @@
  *
  * 엔드포인트:
  *   GET /v1/places/search?q=&lat=&lng=   장소 검색 (카카오/구글 지역 라우팅)
+ *   GET /v1/places/category?code=&rect=   카테고리 검색 (카카오, KV 미사용)
+ *   GET /v1/geo/reverse?lat=&lng=         좌표 → 주소 라벨 (카카오 coord2address)
  *   GET /v1/places/:id                    장소 상세 (기본정보 + 블로그, 구글 미포함)
  *   GET /v1/places/:id/google             구글 평점·리뷰 (lazy — 구글 탭 활성화 시)
  *   GET /v1/blogs?q=&region=kr            네이버+카카오 블로그 병합
@@ -18,10 +20,18 @@
  */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { placesSearchPath, blogsPath, routesPath, capabilitiesPath } from '@wayfinder/shared/api';
+import {
+  placesSearchPath,
+  placesCategoryPath,
+  geoReversePath,
+  blogsPath,
+  routesPath,
+  capabilitiesPath,
+} from '@wayfinder/shared/api';
 import type { Env } from './config.js';
 import { rateLimitMiddleware, routesRateLimit } from './middleware/ratelimit.js';
 import { handlePlacesSearch } from './routes/places-search.js';
+import { handlePlacesCategory, handleGeoReverse } from './routes/places-category.js';
 import { handlePlaceDetail } from './routes/place-detail.js';
 import { handlePlaceGoogle } from './routes/place-google.js';
 import { handleBlogs } from './routes/blogs.js';
@@ -42,6 +52,8 @@ app.get('/', (c) => c.json({ status: 'ok', service: 'wayfinder-proxy', phase: 1 
 // 엔드포인트 (구체 경로를 먼저 등록 — :id/google 이 :id 보다 우선 매칭)
 // 정적 경로는 shared 상수로, 파라미터 경로는 빌더와 정합되는 Hono 패턴(contract.test 강제).
 app.get(placesSearchPath, handlePlacesSearch);
+app.get(placesCategoryPath, handlePlacesCategory); // :id 보다 먼저 — 아니면 id='category'
+app.get(geoReversePath, handleGeoReverse);
 app.get('/v1/places/:id/google', handlePlaceGoogle); // ≡ placeGooglePath(':id')
 app.get('/v1/places/:id', handlePlaceDetail); // ≡ placeDetailPath(':id')
 app.get(blogsPath, handleBlogs);

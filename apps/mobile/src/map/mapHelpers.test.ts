@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   approxZoomForBounds,
+  boundsMoved,
   fitKey,
   markerHtml,
   markerSpec,
@@ -82,5 +83,16 @@ describe('approxZoomForBounds', () => {
     expect(small).toBeGreaterThan(approxZoomForBounds(bounds));
     expect(approxZoomForBounds({ sw: { lat: 0, lng: 0 }, ne: { lat: 0, lng: 0 } })).toBe(19);
     expect(approxZoomForBounds({ sw: { lat: -80, lng: -170 }, ne: { lat: 80, lng: 170 } })).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('boundsMoved', () => {
+  const searched = { sw: { lat: 37.5, lng: 127.0 }, ne: { lat: 37.6, lng: 127.1 } };
+  it('지도 높이만 줄면(폰 목록) 움직인 게 아니다', () => {
+    expect(boundsMoved(searched, { sw: { lat: 37.53, lng: 127.0 }, ne: { lat: 37.6, lng: 127.1 } })).toBe(false);
+  });
+  it('1/4 이상 옮기거나 줌을 바꾸면 움직였다', () => {
+    expect(boundsMoved(searched, { sw: { lat: 37.5, lng: 127.03 }, ne: { lat: 37.6, lng: 127.13 } })).toBe(true);
+    expect(boundsMoved(searched, { sw: { lat: 37.525, lng: 127.025 }, ne: { lat: 37.575, lng: 127.075 } })).toBe(true);
   });
 });

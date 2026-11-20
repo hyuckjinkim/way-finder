@@ -45,7 +45,8 @@ describe('rateLimitMiddleware', () => {
   });
 });
 
-describe('routesRateLimit — POST /v1/routes 전용 한도', () => {
+// 앱 전체(../index.js)를 콜드 import — 패키지 병렬 실행 부하에서 기본 5s를 넘겨 간헐 실패했다.
+describe('routesRateLimit — POST /v1/routes 전용 한도', { timeout: 20_000 }, () => {
   it('ROUTES_RATE_LIMITER 초과면 429, 다른 경로는 영향 없음', async () => {
     const { default: app } = await import('../index.js');
     const env = { DEMO_MODE: 'true', ROUTES_RATE_LIMITER: { limit: async () => ({ success: false }) } };

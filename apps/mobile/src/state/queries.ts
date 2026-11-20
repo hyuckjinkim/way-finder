@@ -16,9 +16,9 @@ import {
   type UseQueryOptions,
   type UseQueryResult,
 } from '@tanstack/react-query';
-import type { Place, PlaceDetail } from '@wayfinder/shared';
-import type { PlaceHint } from '@wayfinder/shared/api';
-import { search, getDetail, getGoogleData } from '../services/PlaceService.js';
+import type { BBox, LatLng, Place, PlaceDetail } from '@wayfinder/shared';
+import type { PlaceCategoryCode, PlaceHint } from '@wayfinder/shared/api';
+import { search, getDetail, getGoogleData, searchCategory, reverseGeocode } from '../services/PlaceService.js';
 import type { GooglePlaceData } from '../services/PlaceService.js';
 import { ApiError } from '../services/apiClient.js';
 
@@ -28,6 +28,9 @@ export const queryKeys = {
   search: (query: string) => ['places', 'search', query] as const,
   detail: (id: string) => ['places', 'detail', id] as const,
   googleData: (id: string) => ['places', 'google', id] as const,
+  category: (code: string, bounds: BBox | null) =>
+    ['places', 'category', code, bounds && [bounds.sw.lat, bounds.sw.lng, bounds.ne.lat, bounds.ne.lng]] as const,
+  reverse: (coord: LatLng | null) => ['geo', 'reverse', coord?.lat, coord?.lng] as const,
 } as const;
 
 // ─── queryOptions 팩토리 (렌더러 없이 테스트 가능) ─────────────────────────────
@@ -80,6 +83,30 @@ export function googleDataQueryOptions(
   };
 }
 
+/** 카테고리 칩(F5) — 칩을 고르거나 '이 지역 재검색'을 눌렀을 때의 영역으로만(자동 재검색 없음). */
+export function categoryQueryOptions(
+  req: { code: PlaceCategoryCode; bounds: BBox } | null,
+): UseQueryOptions<Place[], Error> {
+  return {
+    queryKey: queryKeys.category(req?.code ?? '', req?.bounds ?? null),
+    queryFn: () => searchCategory(req!.code, req!.bounds),
+    enabled: req !== null,
+    staleTime: 60_000,
+    retry: 1,
+  };
+}
+
+/** 길게 누른 좌표의 주소(F6). 실패해도 팝업은 좌표로 동작하므로 재시도 안 함. */
+export function reverseGeocodeQueryOptions(coord: LatLng | null): UseQueryOptions<string | null, Error> {
+  return {
+    queryKey: queryKeys.reverse(coord),
+    queryFn: () => reverseGeocode(coord!),
+    enabled: coord !== null,
+    staleTime: Infinity,
+    retry: false,
+  };
+}
+
 // ─── React Query 훅 ────────────────────────────────────────────────────────────
 
 /** 검색어로 장소 목록을 조회한다. */
@@ -106,4 +133,14 @@ export function useGoogleDataQuery(
   isGoogleTabActive: boolean,
 ): UseQueryResult<GooglePlaceData, Error> {
   return useQuery(googleDataQueryOptions(id, isGoogleTabActive));
+}
+
+export function useCategoryQuery(
+  req: { code: PlaceCategoryCode; bounds: BBox } | null,
+): UseQueryResult<Place[], Error> {
+  return useQuery(categoryQueryOptions(req));
+}
+
+export function useReverseGeocodeQuery(coord: LatLng | null): UseQueryResult<string | null, Error> {
+  return useQuery(reverseGeocodeQueryOptions(coord));
 }
