@@ -1,5 +1,12 @@
 export { koreaTransitRoute } from './koreaTransit.js';
 export {
+  TransitError,
+  classifyOdsayError,
+  isTransitErrorCode,
+  transitErrorCode,
+  type TransitErrorCode,
+} from './transitError.js';
+export {
   normalizeOdsayTransit,
   normalizeOdsayPath,
   applyLaneGeometry,

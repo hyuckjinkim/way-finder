@@ -29,11 +29,31 @@ export const isDemoMode: boolean = !API_BASE_URL;
 /** HTTP 오류 — 호출자가 상태 코드로 분기할 수 있게 status를 보존한다 (예: 501 = 이동수단 미지원). */
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** 프록시 오류 본문 `{error, code}`의 code (예: /v1/routes의 'quota'|'no_route'|'too_close'|'upstream'). */
+  readonly code?: string;
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    if (code !== undefined) this.code = code;
   }
+}
+
+/** 프록시 요청 타임아웃 — 응답이 없으면 "탐색 중"이 영원히 걸린다. */
+const REQUEST_TIMEOUT_MS = 10_000;
+/** AbortSignal.timeout 없는 런타임(구형 Hermes)은 타임아웃 생략. */
+const timeoutSignal = (): AbortSignal | undefined => AbortSignal.timeout?.(REQUEST_TIMEOUT_MS);
+
+/** 실패 응답 → ApiError. 본문이 `{code}` JSON이면 code를 싣는다(본문 없음·비JSON은 무시). */
+async function toApiError(res: Response, url: string): Promise<ApiError> {
+  let code: string | undefined;
+  try {
+    const body = (await res.json()) as { code?: unknown };
+    if (typeof body?.code === 'string') code = body.code;
+  } catch {
+    // 비JSON 본문 — status만으로 분기.
+  }
+  return new ApiError(res.status, `API error ${res.status}: ${res.statusText} — ${url}`, code);
 }
 
 /**
@@ -51,10 +71,8 @@ export async function apiFetch(path: string): Promise<unknown> {
     );
   }
   const url = `${API_BASE_URL}${path}`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText} — ${url}`);
-  }
+  const res = await fetch(url, { signal: timeoutSignal() });
+  if (!res.ok) throw await toApiError(res, url);
   return res.json() as Promise<unknown>;
 }
 
@@ -78,9 +96,8 @@ export async function apiPost(path: string, body: unknown): Promise<unknown> {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
+    signal: timeoutSignal(),
   });
-  if (!res.ok) {
-    throw new ApiError(res.status, `API error ${res.status}: ${res.statusText} — ${url}`);
-  }
+  if (!res.ok) throw await toApiError(res, url);
   return res.json() as Promise<unknown>;
 }

@@ -59,7 +59,21 @@ describe('apiClient — 프록시 URL env 변수명', () => {
       );
     const { apiFetch } = await import('./apiClient.js');
     await apiFetch('/v1/ping');
-    expect(fetchSpy).toHaveBeenCalledWith('https://proxy.example/v1/ping');
+    expect(fetchSpy).toHaveBeenCalledWith('https://proxy.example/v1/ping', { signal: expect.any(AbortSignal) });
+    fetchSpy.mockRestore();
+  });
+
+  it('실패 응답의 JSON {code}를 ApiError.code로 보존 (비JSON이면 code 없음)', async () => {
+    (process.env as Record<string, string>)[PROXY] = 'https://proxy.example';
+    vi.resetModules();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'x', code: 'quota' }), { status: 429 }))
+      .mockResolvedValueOnce(new Response('bad gateway', { status: 502 }));
+    const { apiPost } = await import('./apiClient.js');
+    await expect(apiPost('/v1/routes', {})).rejects.toMatchObject({ status: 429, code: 'quota' });
+    const err = await apiPost('/v1/routes', {}).catch((e: unknown) => e);
+    expect(err).toMatchObject({ status: 502 });
+    expect((err as { code?: string }).code).toBeUndefined();
     fetchSpy.mockRestore();
   });
 });

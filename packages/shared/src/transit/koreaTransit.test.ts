@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { koreaTransitRoute } from './koreaTransit.js';
 import type { OdsayPath } from './odsayTransit.js';
+import { TransitError } from './transitError.js';
 
 const A = { lat: 37.5, lng: 127.0 };
 const B = { lat: 37.6, lng: 127.1 };
@@ -84,8 +85,8 @@ describe('koreaTransitRoute', () => {
     ['error body', () => ok({ error: { code: '-8' } })],
     ['lane count mismatch', () => ok({ result: { lane: [LANE_BODY.result.lane[0]] } })],
     ['network failure', () => Promise.reject(new Error('net'))],
-  ])('keeps original coords on loadLane %s', async (_n, lane) => {
-    mockFetch(lane, [path(1550, '12:2:1:5@34:1:2:6')]);
+  ])('keeps original coords on loadLane %s', async (n, lane) => {
+    mockFetch(lane, [path(1550, `fail:${n}`)]);
     const r = await koreaTransitRoute(req(), 'k');
     expect(r.legs[1]!.coords).toEqual([{ lat: 37.5, lng: 127.0 }, { lat: 37.55, lng: 127.05 }]);
     expect(r.fare).toBe(1550);
@@ -98,5 +99,74 @@ describe('koreaTransitRoute', () => {
     expect(r.alternatives).toBeUndefined();
     expect(r.fare).toBe(2000);
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('total = info.totalTime (no per-leg buffer): sections sum 30, totalTime 25 -> 1500s', async () => {
+    const p = { ...path(1550), info: { totalTime: 25, payment: 1550 } };
+    mockFetch(() => ok({}), [p, { ...path(1250), info: { totalTime: 40, payment: 1250 } }]);
+    const r = await koreaTransitRoute(req(), 'k');
+    expect(r.totalDurationSec).toBe(25 * 60);
+    expect(r.alternatives?.[0]?.totalDurationSec).toBe(40 * 60);
+  });
+
+  it('waypoints: Σ segment totalTime + 300s buffer between segments only', async () => {
+    mockFetch(() => ok({}), [{ ...path(1000), info: { totalTime: 25, payment: 1000 } }]);
+    const r = await koreaTransitRoute(req([A, B, { lat: 37.7, lng: 127.2 }]), 'k');
+    expect(r.totalDurationSec).toBe(25 * 60 * 2 + 300);
+  });
+
+  it('intercity: total = info.totalTime', async () => {
+    mockFetch(() => ok({}), [{ ...path(59800), info: { totalTime: 170, payment: 59800 } }]);
+    const r = await koreaTransitRoute(req([A, { lat: 35.1, lng: 129.0 }]), 'k');
+    expect(r.totalDurationSec).toBe(170 * 60);
+  });
+
+  it('loadLane cached by mapObj: same request twice -> 1 lane call', async () => {
+    const fn = mockFetch(() => ok(LANE_BODY), [path(1550, 'cache:1')]);
+    await koreaTransitRoute(req(), 'k');
+    const r = await koreaTransitRoute(req(), 'k');
+    expect(fn.mock.calls.filter(([u]) => u.includes('loadLane'))).toHaveLength(1);
+    expect(r.legs[1]!.coords).toHaveLength(3);
+  });
+
+  it('passes a timeout signal and no headers (CORS simple GET)', async () => {
+    const fn = mockFetch(() => ok({}), [path(1550)]);
+    await koreaTransitRoute(req(), 'k');
+    const init = (fn.mock.calls[0] as unknown[])[1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(init.headers).toBeUndefined();
+  });
+
+  it.each([
+    [{ error: [{ code: '500', message: '[ApiKeyAuthFailed] ApiKey authentication failed.' }] }, 'auth'],
+    [{ error: [{ code: '429', message: 'Daily quota exceeded' }] }, 'quota'],
+    [{ error: { code: '-98', msg: '출, 도착지가 700m이내입니다.' } }, 'too_close'],
+    [{ error: { code: '-99', msg: '검색결과가 없습니다.' } }, 'no_route'],
+    [{ error: { code: '-8', msg: '필수 입력값 형식 및 범위 오류' } }, 'upstream'],
+    [{ result: {} }, 'upstream'],
+  ])('ODsay error body %j -> TransitError %s', async (body, code) => {
+    vi.stubGlobal('fetch', vi.fn(async () => ok(body)));
+    const err = await koreaTransitRoute(req(), 'k').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TransitError);
+    expect((err as TransitError).code).toBe(code);
+  });
+
+  it('HTTP 429 -> quota, other HTTP error -> upstream', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 429 })));
+    await expect(koreaTransitRoute(req(), 'k')).rejects.toMatchObject({ code: 'quota' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 503 })));
+    await expect(koreaTransitRoute(req(), 'k')).rejects.toMatchObject({ code: 'upstream' });
+  });
+
+  it('loadLane sessionStorage hit -> 0 lane calls; throwing storage still returns a route', async () => {
+    vi.stubGlobal('sessionStorage', { getItem: () => JSON.stringify(LANE_BODY), setItem: () => {} });
+    const fn = mockFetch(() => ok(LANE_BODY), [path(1550, 'session:1')]);
+    const r = await koreaTransitRoute(req(), 'k');
+    expect(fn.mock.calls.filter(([u]) => u.includes('loadLane'))).toHaveLength(0);
+    expect(r.legs[1]!.coords).toHaveLength(3);
+    const boom = () => { throw new Error('blocked'); };
+    vi.stubGlobal('sessionStorage', { getItem: boom, setItem: boom });
+    mockFetch(() => ok(LANE_BODY), [path(1550, 'session:2')]);
+    expect((await koreaTransitRoute(req(), 'k')).legs[1]!.coords).toHaveLength(3);
   });
 });

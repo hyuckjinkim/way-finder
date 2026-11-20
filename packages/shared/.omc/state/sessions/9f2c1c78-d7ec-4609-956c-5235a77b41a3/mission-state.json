@@ -1,0 +1,139 @@
+{
+  "updatedAt": "2026-11-18T00:21:58.749Z",
+  "missions": [
+    {
+      "id": "session:9f2c1c78-d7ec-4609-956c-5235a77b41a3:none",
+      "source": "session",
+      "name": "none",
+      "objective": "Session mission",
+      "createdAt": "2026-11-17T23:01:38.816Z",
+      "updatedAt": "2026-11-18T00:21:58.749Z",
+      "status": "running",
+      "workerCount": 4,
+      "taskCounts": {
+        "total": 4,
+        "pending": 0,
+        "blocked": 0,
+        "inProgress": 1,
+        "completed": 3,
+        "failed": 0
+      },
+      "agents": [
+        {
+          "name": "w1-proxy:aw1-pro",
+          "role": "w1-proxy",
+          "ownership": "aw1-proxy-9e0345570ede4ccc",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-18T00:21:58.749Z"
+        },
+        {
+          "name": "w2-map:aw2-map",
+          "role": "w2-map",
+          "ownership": "aw2-map-57991e88e0a49b33",
+          "status": "running",
+          "currentStep": null,
+          "latestUpdate": null,
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T23:01:50.152Z"
+        },
+        {
+          "name": "w3-e2e:aw3-e2e",
+          "role": "w3-e2e",
+          "ownership": "aw3-e2e-9770bf244b41be1d",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T23:04:45.282Z"
+        },
+        {
+          "name": "w6-route:aw6-rou",
+          "role": "w6-route",
+          "ownership": "aw6-route-10574faae19c96f4",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T23:24:40.243Z"
+        }
+      ],
+      "timeline": [
+        {
+          "id": "session-stop:a762592e7c8dea7f2:2026-11-17T23:04:50.955Z",
+          "at": "2026-11-17T23:04:50.955Z",
+          "kind": "completion",
+          "agent": "w1-proxy:aw1-pro",
+          "detail": "completed",
+          "sourceKey": "session-stop:a762592e7c8dea7f2"
+        },
+        {
+          "id": "session-stop:aw4-transit-20bb8eb10d3638d1:2026-11-17T23:05:34.169Z",
+          "at": "2026-11-17T23:05:34.169Z",
+          "kind": "completion",
+          "agent": "w1-proxy:aw1-pro",
+          "detail": "completed",
+          "sourceKey": "session-stop:aw4-transit-20bb8eb10d3638d1"
+        },
+        {
+          "id": "session-start:aw6-route-10574faae19c96f4:2026-11-17T23:23:43.555Z",
+          "at": "2026-11-17T23:23:43.555Z",
+          "kind": "update",
+          "agent": "w6-route:aw6-rou",
+          "detail": "started w6-route:aw6-rou",
+          "sourceKey": "session-start:aw6-route-10574faae19c96f4"
+        },
+        {
+          "id": "session-stop:a04f0165d1b175200:2026-11-17T23:23:46.762Z",
+          "at": "2026-11-17T23:23:46.762Z",
+          "kind": "completion",
+          "agent": "w1-proxy:aw1-pro",
+          "detail": "completed",
+          "sourceKey": "session-stop:a04f0165d1b175200"
+        },
+        {
+          "id": "session-stop:aw6-route-10574faae19c96f4:2026-11-17T23:24:40.243Z",
+          "at": "2026-11-17T23:24:40.243Z",
+          "kind": "completion",
+          "agent": "w6-route:aw6-rou",
+          "detail": "completed",
+          "sourceKey": "session-stop:aw6-route-10574faae19c96f4"
+        },
+        {
+          "id": "session-stop:acd8d1ea90d6648ec:2026-11-17T23:24:47.354Z",
+          "at": "2026-11-17T23:24:47.354Z",
+          "kind": "completion",
+          "agent": "w1-proxy:aw1-pro",
+          "detail": "completed",
+          "sourceKey": "session-stop:acd8d1ea90d6648ec"
+        },
+        {
+          "id": "session-stop:aw5-home-place-3efba3b2187e7528:2026-11-17T23:26:50.378Z",
+          "at": "2026-11-17T23:26:50.378Z",
+          "kind": "completion",
+          "agent": "w1-proxy:aw1-pro",
+          "detail": "completed",
+          "sourceKey": "session-stop:aw5-home-place-3efba3b2187e7528"
+        },
+        {
+          "id": "session-stop:aef3f50156dd26de7:2026-11-17T23:26:56.797Z",
+          "at": "2026-11-17T23:26:56.797Z",
+          "kind": "completion",
+          "agent": "w1-proxy:aw1-pro",
+          "detail": "completed",
+          "sourceKey": "session-stop:aef3f50156dd26de7"
+        },
+        {
+          "id": "session-stop:a744941e9e02a07b4:2026-11-18T00:21:58.749Z",
+          "at": "2026-11-18T00:21:58.749Z",
+          "kind": "completion",
+          "agent": "w1-proxy:aw1-pro",
+          "detail": "completed",
+          "sourceKey": "session-stop:a744941e9e02a07b4"
+        }
+      ]
+    }
+  ]
+}

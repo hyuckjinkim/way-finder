@@ -18,6 +18,7 @@ import {
 } from './routeQueries.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
 import { ApiError } from '../services/apiClient.js';
+import { TransitError } from '@wayfinder/shared/transit';
 import type { LatLng, RoutePreference, TravelMode } from '@wayfinder/shared';
 
 const SEOUL_A: LatLng = { lat: 37.5563, lng: 126.9723 };
@@ -287,5 +288,21 @@ describe('routeQueryOptions — retry (501 미지원은 즉시 안내)', () => {
   it('그 외 오류는 1회만 재시도 (ODsay 공유 쿼터 보호)', () => {
     expect(retry(0, new ApiError(502, 'API error 502'))).toBe(true);
     expect(retry(1, new Error('network'))).toBe(false);
+  });
+
+  it.each(['quota', 'no_route', 'too_close', 'auth'] as const)('TransitError %s는 재시도하지 않는다', (code) => {
+    expect(retry(0, new TransitError(code))).toBe(false);
+  });
+
+  it('upstream·네트워크는 1회 재시도', () => {
+    expect(retry(0, new TransitError('upstream'))).toBe(true);
+    expect(retry(0, new TypeError('Failed to fetch'))).toBe(true);
+    expect(retry(1, new TransitError('upstream'))).toBe(false);
+  });
+
+  it('staleTime 5분, 포커스 재조회 없음', () => {
+    const opts = routeQueryOptions([SEOUL_A, SEOUL_C], 'transit');
+    expect(opts.staleTime).toBe(5 * 60_000);
+    expect(opts.refetchOnWindowFocus).toBe(false);
   });
 });

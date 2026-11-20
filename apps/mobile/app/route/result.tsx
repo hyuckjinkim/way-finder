@@ -29,12 +29,13 @@ export default function RouteResultRoute() {
 
   // stops 배열 정체성이 매 렌더 바뀌면 useRouteQuery의 디바운스가 무한 재설정되므로 파라미터 값으로 메모.
   const { o, d, w, mode: modeParam } = params;
+  const urlState = React.useMemo(() => parseRouteParams({ o, d, w, mode: modeParam }), [o, d, w, modeParam]);
   const input = React.useMemo(
-    () => resolveRouteInput(parseRouteParams({ o, d, w, mode: modeParam }), { stops: storeStops, mode: storeMode }),
-    [o, d, w, modeParam, storeStops, storeMode],
+    () => resolveRouteInput(urlState, { stops: storeStops, mode: storeMode }),
+    [urlState, storeStops, storeMode],
   );
 
-  const { data, error } = useRouteQuery(
+  const { data, error, refetch } = useRouteQuery(
     input?.stops ?? NO_STOPS,
     input?.mode ?? storeMode,
     preference,
@@ -42,6 +43,9 @@ export default function RouteResultRoute() {
   );
 
   const onStartNav = React.useCallback(() => router.push('/route/nav'), [router]);
+  const onRetry = React.useCallback(() => void refetch(), [refetch]);
+  // URL mode가 스토어보다 우선이라 URL을 바꾼다(스토어 폴백 진입이어도 url.mode가 이긴다).
+  const onSwitchToWalk = React.useCallback(() => router.setParams({ mode: 'walk' }), [router]);
 
   if (!input) {
     return (
@@ -66,6 +70,11 @@ export default function RouteResultRoute() {
       error={error}
       onStartNav={onStartNav}
       onSelectedRouteChange={setResult}
+      onRetry={onRetry}
+      onSwitchToWalk={onSwitchToWalk}
+      origin={urlState.origin}
+      destination={urlState.destination}
+      mode={input.mode}
     />
   );
 }

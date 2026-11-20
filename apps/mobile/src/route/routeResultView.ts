@@ -2,7 +2,7 @@
  * 경로 결과 화면용 순수 뷰 모델 — 포맷터·구간 바·단계 목록·마커·지도 여백.
  * react-native 비의존(단위 테스트 용이). 색은 routeToPolylines의 leg 색을 그대로 쓴다.
  */
-import type { Insets, MapMarker, Route } from '@wayfinder/shared';
+import type { Insets, LatLng, MapMarker, Route, TravelMode } from '@wayfinder/shared';
 import { routeToPolylines } from './routeToPolylines.js';
 
 /** 이 너비 이상이면 좌측 플로팅 카드, 미만이면 하단 시트. */
@@ -33,11 +33,19 @@ export function formatFare(won: number): string {
   return `${String(Math.round(won)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}원`;
 }
 
-/** 현재 시각 + 소요 → 도착 예정 "HH:MM"(로컬 시각). */
+/** 한국 시각(KST) HH:MM — 기기 시간대와 무관. h23: hour12:false는 일부 엔진에서 "24:10"을 낸다. */
+const KST_TIME = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Seoul',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** 현재 시각 + 소요 → 도착 예정 "HH:MM"(Asia/Seoul). */
 export function arrivalTime(now: Date, durationSec: number): string {
-  const t = new Date(now.getTime() + durationSec * 1000);
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${pad(t.getHours())}:${pad(t.getMinutes())}`;
+  const parts = KST_TIME.formatToParts(new Date(now.getTime() + durationSec * 1000));
+  const get = (type: string): string => parts.find((p) => p.type === type)?.value ?? '00';
+  return `${get('hour')}:${get('minute')}`;
 }
 
 /** 도보 leg 합계(분, 반올림). */
@@ -95,11 +103,32 @@ export function routeStepItems(route: Route): StepItem[] {
   });
 }
 
-/** 대중교통 단계 문구: "구로디지털단지 → 강남 (사당 방면) · 24분". 정류장명이 없으면 "사당 방면 · 24분"으로 폴백. */
+/** 단계 소요(분) → 경로 카드와 같은 h/m 표기("2시간 58분"). */
+export const formatMinutes = (minutes: number): string => formatDuration(minutes * 60);
+
+/**
+ * 대중교통 단계 문구: "구로디지털단지 → 강남 (사당 방면) · 24분". 정류장명이 없으면 "사당 방면 · 24분"으로 폴백.
+ * ODsay `way`는 하차역과 같을 수 있다("강남 (강남)") → 정류장명을 보일 때 하차역과 같으면 방면 생략.
+ */
 export function transitStepText(step: Extract<StepItem, { kind: 'transit' }>): string {
   const stops = step.fromStop && step.toStop ? `${step.fromStop} → ${step.toStop}` : '';
-  const head = step.headsign ? (stops ? `(${step.headsign})` : step.headsign) : '';
-  return [[stops, head].filter(Boolean).join(' '), `${step.minutes}분`].filter(Boolean).join(' · ');
+  const headsign = stops && step.headsign?.replace(/\s*방면$/, '') === step.toStop ? '' : step.headsign;
+  const head = headsign ? (stops ? `(${headsign})` : headsign) : '';
+  return [[stops, head].filter(Boolean).join(' '), formatMinutes(step.minutes)].filter(Boolean).join(' · ');
+}
+
+/** 카카오맵 길찾기 링크용 지점(이름 + 좌표). */
+export interface LinkStop {
+  label: string;
+  coord: LatLng;
+}
+
+const KAKAO_BY: Record<TravelMode, string> = { transit: 'traffic', walk: 'walk', car: 'car', bike: 'bicycle' };
+
+/** 카카오맵 웹 길찾기 링크 — 클라이언트에서 만들어 API 쿼터를 쓰지 않는다(쿼터 소진 시 대안). */
+export function kakaoMapLink(origin: LinkStop, destination: LinkStop, mode: TravelMode): string {
+  const seg = (s: LinkStop): string => `${encodeURIComponent(s.label)},${s.coord.lat},${s.coord.lng}`;
+  return `https://map.kakao.com/link/by/${KAKAO_BY[mode]}/${seg(origin)}/${seg(destination)}`;
 }
 
 /** 배지 배경색 위에서 읽히는 글자색. */

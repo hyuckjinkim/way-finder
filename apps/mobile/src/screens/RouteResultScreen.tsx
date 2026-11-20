@@ -15,9 +15,11 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
-import type { Route, RoutePreference } from '@wayfinder/shared';
+import type { Route, RoutePreference, TravelMode } from '@wayfinder/shared';
+import { transitErrorCode } from '@wayfinder/shared/transit';
 import MapView from '../map/MapView';
 import { routeToPolylines, boundsForRoute } from '../route/routeToPolylines.js';
 import { routeSummary } from '../route/routeSummary.js';
@@ -30,13 +32,16 @@ import {
   formatDistance,
   formatDuration,
   formatFare,
+  formatMinutes,
   hasTransit,
+  kakaoMapLink,
   readableTextColor,
   routeMarkers,
   routeStepItems,
   segmentBar,
   transitStepText,
   walkMinutes,
+  type LinkStop,
 } from '../route/routeResultView.js';
 import { isModeUnavailable } from '../services/RouteService.js';
 
@@ -60,13 +65,59 @@ export interface RouteResultScreenProps {
   error?: unknown;
   /** 선택된(지도에 그려진) 경로가 바뀔 때 호출 — 안내 시작이 읽는 스토어 동기화용. */
   onSelectedRouteChange?: (route: Route) => void;
+  /** 일시 오류(upstream·네트워크) 시 "다시 시도" 버튼. */
+  onRetry?: () => void;
+  /** too_close(출·도착 700m 이내) 시 "도보로 보기" 버튼. */
+  onSwitchToWalk?: () => void;
+  /** 쿼터 소진 시 "카카오맵에서 보기" 링크용 출발·도착·모드. */
+  origin?: LinkStop;
+  destination?: LinkStop;
+  mode?: TravelMode;
 }
 
-/** 오류 → 사용자 안내 문구. 501(프록시 MODE_UNAVAILABLE)은 이동수단 미지원. */
+/** 오류 → 사용자 안내 문구. 501(프록시 MODE_UNAVAILABLE)은 이동수단 미지원, 대중교통은 TransitError 코드별. */
 export function routeErrorMessage(error: unknown): string {
-  return isModeUnavailable(error)
-    ? '이 이동수단은 아직 준비 중이에요'
-    : '경로를 찾지 못했어요. 잠시 후 다시 시도해 주세요.';
+  if (isModeUnavailable(error)) return '이 이동수단은 아직 준비 중이에요';
+  switch (transitErrorCode(error)) {
+    case 'quota':
+      return '오늘 길찾기 이용량이 많아 잠시 쉬고 있어요';
+    case 'too_close':
+      return '가까운 거리예요. 도보로 안내할까요?';
+    case 'no_route':
+      return '이 구간은 대중교통 경로가 없어요';
+    default:
+      return '경로를 찾지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+}
+
+/** 오류별 행동 버튼 — quota: 카카오맵 링크(쿼터 0), too_close: 도보 전환, 일시 오류: 다시 시도. */
+function ErrorAction({
+  error,
+  onRetry,
+  onSwitchToWalk,
+  origin,
+  destination,
+  mode,
+}: Pick<RouteResultScreenProps, 'error' | 'onRetry' | 'onSwitchToWalk' | 'origin' | 'destination' | 'mode'>): React.ReactElement | null {
+  if (isModeUnavailable(error)) return null;
+  const code = transitErrorCode(error);
+  let action: { label: string; onPress: () => void; role: 'link' | 'button' } | null = null;
+  if (code === 'quota') {
+    if (origin && destination) {
+      const url = kakaoMapLink(origin, destination, mode ?? 'transit');
+      action = { label: '카카오맵에서 보기', onPress: () => void Linking.openURL(url), role: 'link' };
+    }
+  } else if (code === 'too_close') {
+    if (onSwitchToWalk) action = { label: '도보로 보기', onPress: onSwitchToWalk, role: 'button' };
+  } else if (code !== 'no_route' && onRetry) {
+    action = { label: '다시 시도', onPress: onRetry, role: 'button' };
+  }
+  if (!action) return null;
+  return (
+    <Pressable style={styles.errorBtn} onPress={action.onPress} accessibilityRole={action.role} accessibilityLabel={action.label}>
+      <Text style={styles.errorBtnText}>{action.label}</Text>
+    </Pressable>
+  );
 }
 
 function SegmentBar({ route }: { route: Route }): React.ReactElement {
@@ -97,7 +148,7 @@ function StepList({ route }: { route: Route }): React.ReactElement {
             </>
           ) : (
             <Text style={styles.stepText}>
-              {step.kind === 'walk' ? '도보' : step.mode === 'bike' ? '자전거' : '자동차'} {step.minutes}분
+              {step.kind === 'walk' ? '도보' : step.mode === 'bike' ? '자전거' : '자동차'} {formatMinutes(step.minutes)}
             </Text>
           )}
         </View>
@@ -112,6 +163,11 @@ export function RouteResultScreen({
   onStartNav,
   error,
   onSelectedRouteChange,
+  onRetry,
+  onSwitchToWalk,
+  origin,
+  destination,
+  mode,
 }: RouteResultScreenProps): React.ReactElement {
   const win = useWindowDimensions();
   // 웹 정적 렌더(SSR)는 폭을 모르므로 마운트 후 실제 폭으로 레이아웃을 정한다(OverlayPanel과 동일 이유).
@@ -121,7 +177,12 @@ export function RouteResultScreen({
 
   const [selected, setSelected] = useState(0);
   const [panelHeight, setPanelHeight] = useState(0);
-  const now = useMemo(() => new Date(), [route]);
+  // 도착 예정 시각이 화면을 오래 열어 둬도 맞도록 1분마다 갱신.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // 새 탐색 결과가 오면 첫 경로부터.
   useEffect(() => setSelected(0), [route]);
@@ -172,6 +233,17 @@ export function RouteResultScreen({
               const isActive = r === active;
               const s = routeSummary(r);
               const walk = walkMinutes(r);
+              const duration = formatDuration(s.totalDurationSec);
+              const arrival = `${arrivalTime(now, s.totalDurationSec)} 도착`;
+              const a11y = [
+                `경로 ${idx + 1}`,
+                duration,
+                arrival,
+                r.fare !== undefined ? `요금 ${formatFare(r.fare)}` : null,
+                hasTransit(r) ? `환승 ${s.transfers}회` : null,
+              ]
+                .filter(Boolean)
+                .join(', ');
               return (
                 <Pressable
                   key={idx}
@@ -179,18 +251,18 @@ export function RouteResultScreen({
                   onPress={() => setSelected(idx)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={`경로 ${idx + 1}, ${formatDuration(s.totalDurationSec)}`}
+                  accessibilityLabel={a11y}
                 >
                   <View style={styles.headerRow}>
-                    <Text style={styles.duration}>{formatDuration(s.totalDurationSec)}</Text>
-                    <Text style={styles.arrival}>{arrivalTime(now, s.totalDurationSec)} 도착</Text>
+                    <Text style={styles.duration}>{duration}</Text>
+                    <Text style={styles.arrival}>{arrival}</Text>
                     {r.fare !== undefined && <Text style={styles.fare}>{formatFare(r.fare)}</Text>}
                   </View>
                   <SegmentBar route={r} />
                   <Text style={styles.meta}>
                     {[
                       hasTransit(r) ? `환승 ${s.transfers}회` : null,
-                      walk > 0 ? `도보 ${walk}분` : null,
+                      walk > 0 ? `도보 ${formatMinutes(walk)}` : null,
                       formatDistance(s.totalDistanceM),
                     ]
                       .filter(Boolean)
@@ -224,9 +296,21 @@ export function RouteResultScreen({
             )}
           </ScrollView>
         ) : (
-          <Text style={styles.emptyText} accessibilityRole={error ? 'alert' : undefined}>
-            {error ? routeErrorMessage(error) : '경로를 탐색 중이에요…'}
-          </Text>
+          <View>
+            <Text style={styles.emptyText} accessibilityRole={error ? 'alert' : undefined}>
+              {error ? routeErrorMessage(error) : '경로를 탐색 중이에요…'}
+            </Text>
+            {error ? (
+              <ErrorAction
+                error={error}
+                onRetry={onRetry}
+                onSwitchToWalk={onSwitchToWalk}
+                origin={origin}
+                destination={destination}
+                mode={mode}
+              />
+            ) : null}
+          </View>
         )}
       </View>
     </View>
@@ -319,4 +403,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startNavText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  errorBtn: {
+    alignSelf: 'center',
+    marginTop: 4,
+    minHeight: 44,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    backgroundColor: '#1565c0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

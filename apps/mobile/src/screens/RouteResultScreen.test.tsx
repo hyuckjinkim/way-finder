@@ -23,6 +23,7 @@ import {
 } from '@wayfinder/shared/mocks';
 import { RouteResultScreen } from './RouteResultScreen.js';
 import { ApiError } from '../services/apiClient.js';
+import { TransitError } from '@wayfinder/shared/transit';
 
 const render = (el: React.ReactElement): string => renderToStaticMarkup(el);
 
@@ -231,5 +232,40 @@ describe('RouteResultScreen — 오류 상태 (회귀: 오류 시 "탐색 중" �
     );
     expect(html).toContain('경로를 찾지 못했어요');
     expect(html).not.toContain('준비 중이에요');
+  });
+
+  const O = { label: '구디역', coord: { lat: 37.485, lng: 126.901 } };
+  const D = { label: '강남역', coord: { lat: 37.498, lng: 127.028 } };
+
+  it('quota → 쉬는 중 안내 + 카카오맵 링크 버튼', () => {
+    const html = render(<RouteResultScreen route={null} error={new TransitError('quota')} origin={O} destination={D} mode="transit" />);
+    expect(html).toContain('오늘 길찾기 이용량이 많아 잠시 쉬고 있어요');
+    expect(html).toContain('카카오맵에서 보기');
+    expect(html).not.toContain('다시 시도');
+  });
+
+  it('too_close → 도보 안내 질문 + 도보 전환 버튼', () => {
+    const html = render(<RouteResultScreen route={null} error={new TransitError('too_close')} onSwitchToWalk={() => {}} />);
+    expect(html).toContain('가까운 거리예요. 도보로 안내할까요?');
+    expect(html).toContain('도보로 보기');
+  });
+
+  it('no_route → 대중교통 경로 없음, 재시도 버튼 없음', () => {
+    const html = render(<RouteResultScreen route={null} error={new TransitError('no_route')} onRetry={() => {}} />);
+    expect(html).toContain('이 구간은 대중교통 경로가 없어요');
+    expect(html).not.toContain('다시 시도');
+  });
+
+  it('upstream → 일반 안내 + 다시 시도 버튼', () => {
+    const html = render(<RouteResultScreen route={null} error={new TransitError('upstream')} onRetry={() => {}} />);
+    expect(html).toContain('경로를 찾지 못했어요');
+    expect(html).toContain('다시 시도');
+  });
+});
+
+describe('RouteResultScreen — 카드 접근성 라벨', () => {
+  it('소요·도착·요금·환승 포함', () => {
+    const html = render(<RouteResultScreen route={{ ...TRANSIT_CHAIN, fare: 1650 }} />);
+    expect(html).toMatch(/aria-label="경로 1, [^"]*분, \d\d:\d\d 도착, 요금 1,650원, 환승 1회"/);
   });
 });

@@ -138,12 +138,8 @@ describe('RouteService — 실 모드 (apiPost 스파이)', () => {
   });
 
   it('apiPost throw 시 에러 전파', async () => {
-    vi.resetModules();
-    vi.doMock('./apiClient.js', () => ({
-      isDemoMode: false,
-      apiPost: vi.fn().mockRejectedValue(new Error('API error 500')),
-      apiFetch: vi.fn(),
-    }));
+    const { apiPost } = await import('./apiClient.js');
+    (apiPost as Mock).mockRejectedValueOnce(new Error('API error 500'));
     const { getRoute } = await import('./RouteService.js');
 
     await expect(getRoute(WALK_REQ)).rejects.toThrow('API error 500');
@@ -264,7 +260,7 @@ describe('RouteService — 웹 국내 대중교통 ODsay 직접 호출', () => {
     const { apiPost, getRoute } = await load('uri-key');
     const route = await getRoute(TRANSIT_KR);
     expect(String(fetchMock.mock.calls[0]![0])).toContain('https://api.odsay.com/');
-    expect(fetchMock.mock.calls[0]![1]).toBeUndefined(); // 커스텀 헤더 없는 단순 GET (ODsay CORS)
+    expect(fetchMock.mock.calls[0]![1]?.headers).toBeUndefined(); // 커스텀 헤더 없는 단순 GET (ODsay CORS)
     expect(apiPost).not.toHaveBeenCalled();
     expect(route.legs.some((l) => l.mode === 'transit')).toBe(true);
     vi.unstubAllGlobals();
@@ -307,6 +303,41 @@ describe('RouteService — 웹 국내 대중교통 ODsay 직접 호출', () => {
     const { apiPost, getRoute } = await load('uri-key');
     await getRoute(TRANSIT_KR);
     expect(apiPost).toHaveBeenCalledWith(routesPath, TRANSIT_KR);
+    vi.unstubAllGlobals();
+  });
+
+  const odsayError = (error: unknown) => vi.fn().mockResolvedValue({ ok: true, json: async () => ({ error }) });
+
+  it.each([
+    ['too_close', { code: '-98', msg: '출, 도착지가 700m이내입니다.' }],
+    ['no_route', { code: '-99', msg: '검색결과가 없습니다.' }],
+  ])('ODsay %s → 프록시 폴백 없이 TransitError', async (code, error) => {
+    vi.stubGlobal('fetch', odsayError(error));
+    const { apiPost, getRoute } = await load('uri-key');
+    await expect(getRoute(TRANSIT_KR)).rejects.toMatchObject({ name: 'TransitError', code });
+    expect(apiPost).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('ODsay quota → 프록시 폴백, 이후 탐색은 ODsay를 건너뛴다 (쿼터 곱셈 방지)', async () => {
+    const fetchMock = odsayError([{ code: '429', message: 'Daily quota exceeded' }]);
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { apiPost, getRoute } = await load('uri-key');
+    await getRoute(TRANSIT_KR);
+    await getRoute(TRANSIT_KR);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(apiPost).toHaveBeenCalledTimes(2);
+    vi.unstubAllGlobals();
+  });
+
+  it('프록시 오류 본문 code → TransitError, 그 외(501 등)는 원래 오류 유지', async () => {
+    const { apiPost, getRoute } = await load(undefined);
+    (apiPost as Mock).mockRejectedValueOnce(Object.assign(new Error('API error 429'), { status: 429, code: 'quota' }));
+    await expect(getRoute(TRANSIT_KR)).rejects.toMatchObject({ name: 'TransitError', code: 'quota' });
+    const unavailable = Object.assign(new Error('API error 501'), { status: 501, code: 'MODE_UNAVAILABLE' });
+    (apiPost as Mock).mockRejectedValueOnce(unavailable);
+    await expect(getRoute(TRANSIT_KR)).rejects.toBe(unavailable);
     vi.unstubAllGlobals();
   });
 });

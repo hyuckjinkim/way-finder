@@ -17,6 +17,7 @@ import { useRef, useEffect, useState } from 'react';
 import type { LatLng, Route, RoutePreference, TravelMode } from '@wayfinder/shared';
 import type { Capabilities } from '@wayfinder/shared/api';
 import { getRoute, isModeUnavailable } from '../services/RouteService.js';
+import { transitErrorCode } from '@wayfinder/shared/transit';
 import { getCapabilities } from '../services/CapabilitiesService.js';
 import { ROUTE_DEBOUNCE_MS } from './routeStore.js';
 
@@ -55,10 +56,15 @@ export function routeQueryOptions(
     queryKey: routeQueryKeys.route(stops, mode, preference, maxExtraMinutes),
     queryFn: () => getRoute({ stops, mode, preference, maxExtraMinutes }),
     enabled: stops.length >= 2,
-    staleTime: 60_000, // 1분
-    // 미지원(501)은 재시도 무의미 — 즉시 안내. 그 외는 1회만: 웹 대중교통은 시도마다 ODsay 직접+프록시 호출이라
-    // 공유 쿼터(1,000건/일, 키가 번들에 공개)를 재시도가 곱하지 않게.
-    retry: (failureCount, err) => !isModeUnavailable(err) && failureCount < 1,
+    staleTime: 5 * 60_000, // 5분 — 같은 탐색 재방문에 쿼터를 다시 쓰지 않게
+    refetchOnWindowFocus: false,
+    // 미지원(501)·분류된 공급자 오류(quota·no_route·too_close·auth)는 재시도 무의미 — 즉시 안내.
+    // 그 외(네트워크·upstream)는 1회만: 시도마다 ODsay(30건/일)·카카오 쿼터를 쓰므로 재시도가 곱하지 않게.
+    retry: (failureCount, err) => {
+      const code = transitErrorCode(err);
+      if (isModeUnavailable(err) || (code && code !== 'upstream')) return false;
+      return failureCount < 1;
+    },
   };
 }
 
