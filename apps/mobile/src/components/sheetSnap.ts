@@ -26,16 +26,21 @@ export function snapHeights(windowHeight: number): [peek: number, half: number, 
 }
 
 /**
- * 손을 뗐을 때 도착할 스냅 높이. 속도(px/ms, 위로 드래그=양수)가 충분하면 진행 방향의
- * 다음 스냅으로, 아니면 가장 가까운 스냅으로 간다.
+ * 손을 뗐을 때 도착할 스냅 높이. 속도(px/ms, 위로 드래그=양수)가 충분하면 드래그를 **시작한**
+ * 스냅(startHeight)의 진행 방향 다음 스냅으로(한 번 쓸기 = 한 칸), 아니면 가장 가까운 스냅으로 간다.
+ * 이미 그 다음 스냅을 지나 놓았다면 가장 가까운 스냅을 넘어 되돌리지 않는다.
  */
-export function pickSnap(height: number, velocity: number, snaps: number[]): number {
+export function pickSnap(height: number, velocity: number, snaps: number[], startHeight = height): number {
   const sorted = [...snaps].sort((a, b) => a - b);
-  if (Math.abs(velocity) > 0.5) {
-    const next = velocity > 0 ? sorted.find((s) => s > height + 1) : [...sorted].reverse().find((s) => s < height - 1);
-    if (next !== undefined) return next;
+  const nearest = sorted.reduce((best, s) => (Math.abs(s - height) < Math.abs(best - height) ? s : best));
+  if (velocity > 0.5) {
+    const next = sorted.find((s) => s > startHeight + 1);
+    if (next !== undefined) return Math.max(next, nearest);
+  } else if (velocity < -0.5) {
+    const next = [...sorted].reverse().find((s) => s < startHeight - 1);
+    if (next !== undefined) return Math.min(next, nearest);
   }
-  return sorted.reduce((best, s) => (Math.abs(s - height) < Math.abs(best - height) ? s : best));
+  return nearest;
 }
 
 export type HomePanel = 'none' | 'peek' | 'full';

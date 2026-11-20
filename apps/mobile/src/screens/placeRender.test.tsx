@@ -50,13 +50,15 @@ describe('HomeScreen', () => {
 });
 
 describe('OverlayPanel', () => {
-  it('SSR에선 바텀시트(핸들 포함)로 자식을 렌더한다', () => {
+  // SSR은 창 높이를 몰라 height:0 시트를 굽고 하이드레이션이 그 스타일을 안 고친다(fac444b) —
+  // 정적 HTML엔 시트를 넣지 않고 마운트 후에만 그린다.
+  it('SSR에선 시트를 굽지 않는다(마운트 후 렌더)', () => {
     const html = render(
       <OverlayPanel>
         <span>본문</span>
       </OverlayPanel>,
     );
-    expect(html).toContain('본문');
-    expect(html).toContain('aria-label="시트 높이 조절"');
+    expect(html).not.toContain('본문');
+    expect(html).not.toContain('aria-label="시트 높이 조절"');
   });
 });

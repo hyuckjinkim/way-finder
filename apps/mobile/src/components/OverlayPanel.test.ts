@@ -21,6 +21,14 @@ describe('snapHeights / pickSnap', () => {
     expect(pickSnap(250, 1.2, snaps)).toBe(480);
     expect(pickSnap(700, -1.2, snaps)).toBe(480);
   });
+  it('한 번 쓸기는 시작 스냅에서 한 칸만 — 30%에서 60%를 살짝 넘겨 놓아도 90%로 튀지 않는다', () => {
+    expect(pickSnap(490, 0.8, snaps, 240)).toBe(480);
+    expect(pickSnap(470, -0.8, snaps, 720)).toBe(480);
+  });
+  it('다음 스냅을 한참 지나 놓았으면 가까운 스냅을 넘어 되돌리지 않는다', () => {
+    expect(pickSnap(700, 0.8, snaps, 240)).toBe(720);
+    expect(pickSnap(250, -0.8, snaps, 720)).toBe(240);
+  });
   it('끝에서는 더 못 가고 그 자리에 머문다', () => {
     expect(pickSnap(720, 2, snaps)).toBe(720);
     expect(pickSnap(240, -2, snaps)).toBe(240);

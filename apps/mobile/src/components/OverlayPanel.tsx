@@ -5,7 +5,7 @@
  * - 폰(<768): 네이버식 바텀시트. 스냅 30%(엿보기) / 60% / 90%, 핸들을 드래그(터치·마우스 모두).
  * - 넓은 화면(≥768): 좌측 플로팅 카드(여백 16, 폭 380, 라운드 16, 그림자). 높이는 내용에 맞고
  *   화면-32까지, 헤더의 화살표로 접는다.
- * 패널 밖(지도 영역) 터치는 아래 지도로 통과한다(box-none).
+ * 패널 밖(지도 영역) 터치는 아래 지도로 통과한다(box-none + 아래 웹 CSS).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -43,16 +43,36 @@ const HANDLE_ZONE = 44;
 // 웹 터치 드래그 시 브라우저 스크롤이 제스처를 가로채지 않게.
 const NO_TOUCH_ACTION = Platform.select({ web: { touchAction: 'none' } as unknown as ViewStyle, default: {} });
 
+// 웹: react-navigation(native-stack 웹)이 transparentModal 화면을 전체화면 div 3겹
+// (Screen 배경 · content · contentContainer)으로 감싸 패널 밖 휠·드래그·클릭과 홈 FAB를 막는다.
+// 옵션(contentStyle)은 가장 안쪽 한 겹에만 닿아, 패널 루트(testID→data-testid)의 바로 위 3겹만 통과시킨다.
+// ponytail: 깊이 3 고정 — 라이브러리가 래퍼를 바꾸면 e2e(패널 열린 채 지도 휠·드래그)가 잡는다.
+const OVERLAY_TEST_ID = 'overlay-panel';
+const PASSTHROUGH_STYLE_ID = 'wayfinder-overlay-passthrough';
+const M = `[data-testid="${OVERLAY_TEST_ID}"]`;
+const PASSTHROUGH_CSS = `div:has(>${M}),div:has(>div>${M}),div:has(>div>div>${M}){pointer-events:none}`;
+
+function installOverlayPassthrough(): void {
+  if (Platform.OS !== 'web' || typeof document === 'undefined' || document.getElementById(PASSTHROUGH_STYLE_ID)) return;
+  const el = document.createElement('style');
+  el.id = PASSTHROUGH_STYLE_ID;
+  el.textContent = PASSTHROUGH_CSS;
+  document.head.appendChild(el);
+}
+
 export function OverlayPanel({ children, initialSnap = 'full', title = '' }: OverlayPanelProps): React.ReactElement {
   const { width, height } = useWindowDimensions();
   // 웹 정적 렌더(SSR)는 폭을 모른 채 그리고, 하이드레이션은 서버 스타일을 고치지 않는다.
   // 마운트 후 한 번 더 렌더해 실제 폭을 반영한다.
   const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    installOverlayPassthrough();
+    setMounted(true);
+  }, []);
   const placement = panelPlacement(width);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none" testID={OVERLAY_TEST_ID}>
       {/* SSR은 창 높이 0으로 시트 height:0을 굽고 하이드레이션이 그 인라인 스타일을 안 고친다 —
           직접 진입(/route/input 새로고침) 시 시트가 안 보였다. 마운트 후에만 그린다. */}
       {!mounted ? null : placement === 'side' ? (
@@ -116,9 +136,17 @@ function BottomSheet({
   const startH = useRef(current.current);
   const snapsRef = useRef(snaps);
   snapsRef.current = snaps;
+  const bodyRef = useRef<View>(null);
 
   const moveTo = (h: number): void => {
     current.current = h;
+    // 엿보기로 내리면 내용 스크롤을 맨 위로 — 안 그러면 제목이 잘린 채 남는다.
+    // ponytail: 웹만(RN-web ref = DOM). 네이티브는 자식 ScrollView ref가 필요해 보류.
+    if (h === snapsRef.current[0] && Platform.OS === 'web') {
+      (bodyRef.current as unknown as HTMLElement | null)?.querySelectorAll('*').forEach((el) => {
+        if (el.scrollTop) el.scrollTop = 0;
+      });
+    }
     Animated.timing(sheetH, { toValue: h, duration: 180, useNativeDriver: false }).start();
   };
 
@@ -148,7 +176,7 @@ function BottomSheet({
             moveTo(s.find((h) => h > startH.current + 1) ?? minH);
             return;
           }
-          moveTo(pickSnap(current.current, -g.vy, snapsRef.current));
+          moveTo(pickSnap(current.current, -g.vy, snapsRef.current, startH.current));
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -165,7 +193,9 @@ function BottomSheet({
       >
         <View style={styles.handle} />
       </View>
-      <View style={styles.sheetBody}>{children}</View>
+      <View ref={bodyRef} style={styles.sheetBody}>
+        {children}
+      </View>
     </Animated.View>
   );
 }
