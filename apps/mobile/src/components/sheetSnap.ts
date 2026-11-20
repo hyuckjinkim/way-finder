@@ -20,6 +20,27 @@ export type SnapName = keyof typeof SNAP_FRACTIONS;
 export const CARD_INSET = 16;
 export const CARD_WIDTH = 380;
 
+/** 데스크톱 카드 아래로 비워 둘 높이 — 좌하단 지도 로고·축척(카카오 약관상 가리면 안 됨). */
+export const MAP_LOGO_CLEARANCE = 48;
+
+/** 데스크톱 카드 최대 높이: 위 여백 + 좌하단 로고 자리를 뺀다. */
+export function cardMaxHeight(windowHeight: number): number {
+  return Math.max(0, windowHeight - CARD_INSET - MAP_LOGO_CLEARANCE);
+}
+
+/** 현재 높이에서 가장 가까운 스냅 기준으로 dir(+1 위, -1 아래)만큼 한 칸 — 끝에선 머문다(스크린리더·화살표키). */
+export function stepSnap(height: number, dir: 1 | -1, snaps: number[]): number {
+  const sorted = [...snaps].sort((a, b) => a - b);
+  const i = sorted.indexOf(pickSnap(height, 0, sorted));
+  return sorted[Math.min(sorted.length - 1, Math.max(0, i + dir))]!;
+}
+
+/** 탭·Enter/Space: 다음 큰 스냅, 맨 위면 가장 작은 스냅으로 순환. */
+export function cycleSnap(height: number, snaps: number[]): number {
+  const sorted = [...snaps].sort((a, b) => a - b);
+  return sorted.find((h) => h > height + 1) ?? sorted[0]!;
+}
+
 export function snapHeights(windowHeight: number): [peek: number, half: number, full: number] {
   const h = (f: number): number => Math.round(windowHeight * f);
   return [h(SNAP_FRACTIONS.peek), h(SNAP_FRACTIONS.half), h(SNAP_FRACTIONS.full)];
@@ -49,6 +70,11 @@ export type HomePanel = 'none' | 'peek' | 'full';
 export function panelForPath(pathname: string): HomePanel {
   if (pathname === '/' || pathname === '') return 'none';
   return pathname.startsWith('/place') ? 'peek' : 'full';
+}
+
+/** 홈 지도를 가리지 않는 패널 라우트(검색·장소·경로 입력) — 경로 결과·로드뷰·내비는 홈을 덮는 화면이라 제외. */
+export function isOverlayPath(pathname: string): boolean {
+  return pathname === '/search' || pathname.startsWith('/place/') || pathname === '/route/input';
 }
 
 export interface HomeChrome {

@@ -11,4 +11,6 @@ trap 'rm -rf "$OUT"; scripts/env-sync.sh >/dev/null' EXIT  # 끝나면 로컬 �
 EXPO_PUBLIC_PROXY_BASE_URL="$PROXY_URL" scripts/env-sync.sh --deploy
 (cd services/proxy && npx wrangler deploy)
 (cd apps/mobile && npx expo export --platform web --clear --output-dir "$OUT")
+# Pages는 404.html이 없으면 index.html(홈)로 폴백 → 클라이언트는 NotFound라 하이드레이션 #418.
+[ -f "$OUT/+not-found.html" ] && cp "$OUT/+not-found.html" "$OUT/404.html" || echo "WARN: +not-found.html 없음 — 404.html 생략"
 npx --prefix services/proxy wrangler pages deploy "$OUT" --project-name wayfinder --branch main --commit-dirty=true

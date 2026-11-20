@@ -11,12 +11,15 @@ export function formatDistance(meters: number): string {
   return km < 10 ? `${km.toFixed(1)}km` : `${Math.round(km)}km`;
 }
 
-/** `업종 · 거리 · 주소` — 비어 있는 항목은 건너뛴다. */
-export function placeSubtitle(place: Pick<Place, 'category' | 'categoryGroup' | 'distanceM' | 'address'>): string {
+/** `업종 · 거리 · 주소` — 비어 있는 항목은 건너뛴다. 제목(title)과 같은 주소는 다시 쓰지 않는다(주소 검색 결과). */
+export function placeSubtitle(
+  place: Pick<Place, 'category' | 'categoryGroup' | 'distanceM' | 'address'>,
+  title?: string,
+): string {
   const parts = [
     place.categoryGroup || place.category,
     place.distanceM === undefined ? '' : formatDistance(place.distanceM),
-    place.address,
+    place.address === title ? '' : place.address,
   ];
   return parts.filter(Boolean).join(' · ');
 }

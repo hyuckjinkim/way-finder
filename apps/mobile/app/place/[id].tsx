@@ -9,7 +9,7 @@
  * 주입한다(구글 탭 활성 시에만 호출). 정적 export(SSR) 시 detail은 undefined — 가드 후 렌더한다.
  */
 import React, { useCallback, useEffect } from 'react';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import type { PlaceDetail } from '@wayfinder/shared';
 import { OverlayPanel } from '../../src/components/OverlayPanel';
 import { PlaceDetailSheet, type GoogleData } from '../../src/screens/PlaceDetailSheet';
@@ -20,13 +20,16 @@ import { useAppStore } from '../../src/state/store';
 import { getGoogleData } from '../../src/services/PlaceService';
 import { parsePlaceHint } from '../../src/search/placeUrl';
 import { routeInputHref } from '../../src/search/placeActions';
+import { ApiError } from '../../src/services/apiClient';
 
 export default function PlaceDetailRoute() {
   const params = useLocalSearchParams<{ id: string; name?: string; lat?: string; lng?: string }>();
   const router = useRouter();
+  // 출발/도착으로 경로 입력을 push하면 이 카드는 아래에 남는다 — 겹쳐 비치지 않게 숨긴다(뒤로 오면 그대로).
+  const isFocused = useIsFocused();
   const id = params.id ?? null;
   const hint = parsePlaceHint(params);
-  const { data: detail, isError, refetch, isFetching } = usePlaceDetailQuery(id, hint);
+  const { data: detail, isError, error, refetch, isFetching } = usePlaceDetailQuery(id, hint);
 
   // 포커스를 가질 때 선택 장소를 기록(딥링크·새로고침 포함). 검색에서 막 골랐다면 이미 같은 id라 건드리지 않는다.
   const hintKey = hint ? `${hint.name}|${hint.coord.lat}|${hint.coord.lng}` : '';
@@ -77,7 +80,7 @@ export default function PlaceDetailRoute() {
   const name = detail?.name ?? hint?.name;
 
   return (
-    <OverlayPanel initialSnap="peek" title={name ?? '장소 정보'}>
+    <OverlayPanel initialSnap="peek" title={name ?? '장소 정보'} hidden={!isFocused}>
       {detail ? (
         <PlaceDetailSheet
           detail={detail}
@@ -90,7 +93,7 @@ export default function PlaceDetailRoute() {
       ) : (
         <PlaceSheetStatus
           name={name}
-          state={isError ? 'error' : 'loading'}
+          state={isError ? (error instanceof ApiError && error.status === 404 ? 'notFound' : 'error') : 'loading'}
           retrying={isFetching}
           onRetry={() => void refetch()}
           onClose={onClose}

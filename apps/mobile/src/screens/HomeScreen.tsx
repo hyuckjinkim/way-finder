@@ -10,7 +10,7 @@
  * 패널(검색·경로·장소 상세)이 열려 있으면(`panel`) 검색바·FAB 배치를 비켜 준다.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Pressable, Platform, StyleSheet, useWindowDimensions } from 'react-native';
 import type {
   CameraState,
   LatLng,
@@ -47,6 +47,13 @@ export interface HomeScreenProps {
   panel?: HomePanel;
   /** 상단 토스트 문구(예: 위치 권한 안내). */
   notice?: string | null;
+  /** 바뀌면 같은 문구라도 토스트를 다시 띄운다(타이머 재시작). */
+  noticeId?: number;
+  /**
+   * 홈 위에 지도를 가리지 않는 패널(검색·장소·경로 입력)이 떠 있음 — 웹에서 스택이 홈 화면에 거는
+   * aria-hidden을 걷어 보이고 눌리는 FAB·지도를 스크린리더도 읽게 한다.
+   */
+  revealBehindPanel?: boolean;
   onDismissNotice?: () => void;
   /** 검색바 탭 — 검색 화면 진입(E가 배선). */
   onOpenSearch?: () => void;
@@ -66,6 +73,8 @@ export function HomeScreen({
   focusSeq = 0,
   panel = 'none',
   notice,
+  noticeId,
+  revealBehindPanel = false,
   onDismissNotice,
   onOpenSearch,
   onRequestLocation,
@@ -75,7 +84,27 @@ export function HomeScreen({
   const [localCamera, setLocalCamera] = useState<CameraState>(initialCamera);
   const camera = controlledCamera ?? localCamera;
   const { width, height } = useWindowDimensions();
-  const chrome = homeChrome(panel, width, height);
+  // 웹 정적 렌더(SSR)는 창 크기 0으로 그린다 — 첫 클라이언트 렌더도 0으로 맞춰야 하이드레이션(#418)이 안 깨진다.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const chrome = homeChrome(panel, mounted ? width : 0, mounted ? height : 0);
+  const rootRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !revealBehindPanel) return;
+    const root = rootRef.current as unknown as HTMLElement | null;
+    if (!root?.parentElement) return;
+    const unhide = (): void => {
+      for (let el = root.parentElement; el; el = el.parentElement) {
+        if (el.getAttribute('aria-hidden') === 'true') el.removeAttribute('aria-hidden');
+      }
+    };
+    unhide();
+    // ponytail: 스택이 포커스 변화 때 aria-hidden을 다시 거는 걸 관찰로 되돌린다 — 라이브러리가 inert를 쓰기 시작하면 여기도.
+    const mo = new MutationObserver(unhide);
+    mo.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-hidden'] });
+    return () => mo.disconnect();
+  }, [revealBehindPanel]);
 
   // 장소를 고르면 항상 '엿보기' 시트가 뜬다 → 그 여백으로 맞춘다. 좌표가 바뀔 때만 다시 계산
   // (패널이 바뀌거나 사용자가 지도를 옮긴 뒤 검색을 열어도 되돌아가지 않게).
@@ -108,7 +137,7 @@ export function HomeScreen({
   };
 
   return (
-    <View style={styles.root}>
+    <View style={styles.root} ref={rootRef}>
       <MapView
         ref={mapRef}
         camera={camera}
@@ -154,7 +183,7 @@ export function HomeScreen({
       ) : null}
 
       {notice && onDismissNotice ? (
-        <Toast message={notice} onDismiss={onDismissNotice} top={chrome.showSearchBar ? 72 : 12} />
+        <Toast key={noticeId} message={notice} onDismiss={onDismissNotice} top={chrome.showSearchBar ? 72 : 12} />
       ) : null}
     </View>
   );

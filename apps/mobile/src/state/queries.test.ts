@@ -55,6 +55,10 @@ describe('searchQueryOptions — 활성화 조건', () => {
     const opts = searchQueryOptions('   ');
     expect(opts.enabled).toBe(false);
   });
+
+  it('공급자 실패(502)는 최대 1번만 재시도한다', () => {
+    expect(searchQueryOptions('카페').retry).toBe(1);
+  });
 });
 
 describe('placeDetailQueryOptions — 활성화 조건', () => {

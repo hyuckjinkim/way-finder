@@ -30,7 +30,8 @@ export function SegmentedTabs({
             style={[styles.segment, isActive && styles.segmentActive]}
             onPress={() => onChange(tab)}
             accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
+            // aria-selected: RN-web은 accessibilityState.selected를 DOM에 싣지 않는다(웹 스크린리더·QA가 못 봄).
+            aria-selected={isActive}
             accessibilityLabel={TAB_LABELS[tab]}
           >
             <Text style={[styles.label, isActive && styles.labelActive]}>
@@ -60,6 +61,7 @@ const styles = StyleSheet.create({
   segmentActive: {
     backgroundColor: '#fff',
   },
-  label: { fontSize: 14, color: '#6b7280' },
+  // #f0f0f0 바 위 6.7:1 (이전 #6b7280은 4.2 — AA 미달).
+  label: { fontSize: 14, color: '#4b5563' },
   labelActive: { color: '#1a1a1a', fontWeight: '600' },
 });

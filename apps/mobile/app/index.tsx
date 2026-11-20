@@ -8,14 +8,17 @@
  * - 장소 상세·검색·경로 입력은 이 화면 위에 패널로 뜬다(pathname으로 패널 종류 판별).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, usePathname, useRouter } from 'expo-router';
 import type { MapMarker } from '@wayfinder/shared';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { useAppStore } from '../src/state/store';
 import { getUserLocation } from '../src/services/LocationService';
-import { panelForPath } from '../src/components/sheetSnap';
+import { isOverlayPath, panelForPath } from '../src/components/sheetSnap';
 
 const LOCATION_NOTICE = '위치 권한을 허용하면 내 주변부터 보여드려요';
+// '내 위치'를 직접 눌렀을 때 — 무엇을 하면 되는지까지.
+const LOCATION_DENIED_HELP = '위치 권한이 꺼져 있어요. 주소창 왼쪽 사이트 설정(자물쇠)에서 위치를 허용한 뒤 다시 눌러 주세요.';
+const LOCATION_ERROR = '현재 위치를 찾지 못했어요. 잠시 후 다시 시도해 주세요.';
 const USER_ZOOM = 15;
 
 export default function HomeRoute() {
@@ -27,24 +30,34 @@ export default function HomeRoute() {
   const userLocation = useAppStore((s) => s.userLocation);
   const setCamera = useAppStore((s) => s.setCamera);
   const setUserLocation = useAppStore((s) => s.setUserLocation);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; id: number } | null>(null);
+  const showNotice = useCallback((text: string) => setNotice((n) => ({ text, id: (n?.id ?? 0) + 1 })), []);
+
+  // 딥링크(/place/x?name=…)로 들어오면 expo-router가 아래에 깐 홈에도 같은 params를 복사한다 —
+  // 패널을 닫으면 URL이 /?id=…로 남는다. 홈 자신의 params는 늘 비워 둔다.
+  const navigation = useNavigation();
+  const homeParams = useLocalSearchParams();
+  const strayKeys = Object.keys(homeParams).filter((k) => homeParams[k] !== undefined);
+  useEffect(() => {
+    if (strayKeys.length > 0) navigation.setParams(Object.fromEntries(strayKeys.map((k) => [k, undefined])) as never);
+  }, [strayKeys.join('|'), navigation]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const markers: MapMarker[] | undefined = selectedPlace
     ? [{ id: selectedPlace.id, coord: selectedPlace.coord, title: selectedPlace.name, kind: 'place', selected: true }]
     : undefined;
 
-  /** 내 위치를 구해 파란 점을 찍고, shouldMove()가 참이면 카메라도 옮긴다(거부·실패는 토스트). */
+  /** 내 위치를 구해 파란 점을 찍고, shouldMove()가 참이면 카메라도 옮긴다(거부·실패는 토스트). explicit = 버튼을 직접 누름. */
   const locate = useCallback(
-    async (shouldMove: () => boolean) => {
+    async (shouldMove: () => boolean, explicit = false) => {
       const result = await getUserLocation();
       if (result.status !== 'ok') {
-        setNotice(LOCATION_NOTICE);
+        showNotice(!explicit ? LOCATION_NOTICE : result.status === 'denied' ? LOCATION_DENIED_HELP : LOCATION_ERROR);
         return;
       }
       setUserLocation(result.coord);
       if (shouldMove()) setCamera({ center: result.coord, zoom: USER_ZOOM });
     },
-    [setCamera, setUserLocation],
+    [setCamera, setUserLocation, showNotice],
   );
 
   // 시작 시 한 번 — 장소 링크로 들어왔으면(이미 선택 장소가 있으면) 카메라는 건드리지 않는다.
@@ -53,7 +66,7 @@ export default function HomeRoute() {
   }, [locate]);
 
   const onOpenSearch = useCallback(() => router.push('/search'), [router]);
-  const onRequestLocation = useCallback(() => void locate(() => true), [locate]);
+  const onRequestLocation = useCallback(() => void locate(() => true, true), [locate]);
   const onOpenRoute = useCallback(() => router.push('/route/input'), [router]);
   const onDismissNotice = useCallback(() => setNotice(null), []);
 
@@ -66,7 +79,9 @@ export default function HomeRoute() {
       focus={selectedPlace?.coord}
       focusSeq={focusSeq}
       panel={panelForPath(pathname)}
-      notice={notice}
+      notice={notice?.text}
+      noticeId={notice?.id}
+      revealBehindPanel={isOverlayPath(pathname)}
       onDismissNotice={onDismissNotice}
       onOpenSearch={onOpenSearch}
       onRequestLocation={onRequestLocation}

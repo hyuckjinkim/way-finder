@@ -23,9 +23,12 @@ import {
   CARD_INSET,
   CARD_WIDTH,
   SNAP_FRACTIONS,
+  cardMaxHeight,
+  cycleSnap,
   panelPlacement,
   pickSnap,
   snapHeights,
+  stepSnap,
   type SnapName,
 } from './sheetSnap';
 
@@ -35,11 +38,19 @@ export interface OverlayPanelProps {
   children: React.ReactNode;
   /** 폰 바텀시트의 처음 높이(기본 full — 검색·경로 입력). 장소 상세는 'peek'. */
   initialSnap?: SnapName;
-  /** 데스크톱 카드 헤더 제목. */
+  /** 데스크톱 카드 헤더 제목(웹에선 패널 영역의 접근성 이름도). */
   title?: string;
+  /** 스택에서 위에 다른 패널이 덮었을 때 — 상태는 유지한 채 숨긴다(카드가 겹쳐 비치지 않게). */
+  hidden?: boolean;
 }
 
 const HANDLE_ZONE = 44;
+const HANDLE_ACTIONS = [
+  { name: 'increment', label: '시트 올리기' },
+  { name: 'decrement', label: '시트 내리기' },
+] as const;
+// 웹: 시트 핸들을 Tab으로 갈 수 있게.
+const WEB_TAB_STOP = Platform.select({ web: { tabIndex: 0 as const }, default: {} });
 // 웹 터치 드래그 시 브라우저 스크롤이 제스처를 가로채지 않게.
 const NO_TOUCH_ACTION = Platform.select({ web: { touchAction: 'none' } as unknown as ViewStyle, default: {} });
 
@@ -48,6 +59,8 @@ const NO_TOUCH_ACTION = Platform.select({ web: { touchAction: 'none' } as unknow
 // 옵션(contentStyle)은 가장 안쪽 한 겹에만 닿아, 패널 루트(testID→data-testid)의 바로 위 3겹만 통과시킨다.
 // ponytail: 깊이 3 고정 — 라이브러리가 래퍼를 바꾸면 e2e(패널 열린 채 지도 휠·드래그)가 잡는다.
 const OVERLAY_TEST_ID = 'overlay-panel';
+// 패널 루트는 프로그램 포커스만 받는다(Tab 순서엔 안 들어감, 포커스 링은 webFocus.ts가 끔).
+const WEB_FOCUSABLE = Platform.select({ web: { tabIndex: -1 as const }, default: {} });
 const PASSTHROUGH_STYLE_ID = 'wayfinder-overlay-passthrough';
 const M = `[data-testid="${OVERLAY_TEST_ID}"]`;
 const PASSTHROUGH_CSS = `div:has(>${M}),div:has(>div>${M}),div:has(>div>div>${M}){pointer-events:none}`;
@@ -60,7 +73,13 @@ function installOverlayPassthrough(): void {
   document.head.appendChild(el);
 }
 
-export function OverlayPanel({ children, initialSnap = 'full', title = '' }: OverlayPanelProps): React.ReactElement {
+/** 웹: 패널이 보이게 되면 포커스를 패널 안으로(이미 안에 있으면 — 예: 검색 autoFocus — 그대로). */
+function focusInto(el: HTMLElement | null): void {
+  if (!el || el.contains(document.activeElement)) return;
+  el.focus({ preventScroll: true });
+}
+
+export function OverlayPanel({ children, initialSnap = 'full', title = '', hidden = false }: OverlayPanelProps): React.ReactElement {
   const { width, height } = useWindowDimensions();
   // 웹 정적 렌더(SSR)는 폭을 모른 채 그리고, 하이드레이션은 서버 스타일을 고치지 않는다.
   // 마운트 후 한 번 더 렌더해 실제 폭을 반영한다.
@@ -70,13 +89,28 @@ export function OverlayPanel({ children, initialSnap = 'full', title = '' }: Ove
     setMounted(true);
   }, []);
   const placement = panelPlacement(width);
+  const rootRef = useRef<View>(null);
+  useEffect(() => {
+    if (!mounted || hidden || Platform.OS !== 'web') return;
+    // 자식 autoFocus가 먼저 잡도록 한 틱 뒤에.
+    const t = setTimeout(() => focusInto(rootRef.current as unknown as HTMLElement | null), 0);
+    return () => clearTimeout(t);
+  }, [mounted, hidden]);
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="box-none" testID={OVERLAY_TEST_ID}>
+    <View
+      ref={rootRef}
+      style={[StyleSheet.absoluteFill, hidden && styles.hidden]}
+      pointerEvents="box-none"
+      testID={OVERLAY_TEST_ID}
+      role="region"
+      aria-label={title || undefined}
+      {...WEB_FOCUSABLE}
+    >
       {/* SSR은 창 높이 0으로 시트 height:0을 굽고 하이드레이션이 그 인라인 스타일을 안 고친다 —
           직접 진입(/route/input 새로고침) 시 시트가 안 보였다. 마운트 후에만 그린다. */}
       {!mounted ? null : placement === 'side' ? (
-        <FloatingCard title={title} maxHeight={height - CARD_INSET * 2}>
+        <FloatingCard title={title} maxHeight={cardMaxHeight(height)}>
           {children}
         </FloatingCard>
       ) : (
@@ -137,6 +171,7 @@ function BottomSheet({
   const snapsRef = useRef(snaps);
   snapsRef.current = snaps;
   const bodyRef = useRef<View>(null);
+  const handleRef = useRef<View>(null);
 
   const moveTo = (h: number): void => {
     current.current = h;
@@ -170,10 +205,9 @@ function BottomSheet({
           sheetH.setValue(h);
         },
         onPanResponderRelease: (_e, g) => {
-          // 탭(거의 안 움직임)은 다음 스냅으로 순환 — 마우스·키보드 사용자용.
+          // 탭(거의 안 움직임)은 다음 스냅으로 순환 — 마우스 사용자용.
           if (Math.abs(g.dy) < 4 && Math.abs(g.dx) < 4) {
-            const s = snapsRef.current;
-            moveTo(s.find((h) => h > startH.current + 1) ?? minH);
+            moveTo(cycleSnap(startH.current, snapsRef.current));
             return;
           }
           moveTo(pickSnap(current.current, -g.vy, snapsRef.current, startH.current));
@@ -183,13 +217,39 @@ function BottomSheet({
     [minH, maxH],
   );
 
+  // 웹 키보드: 핸들에 Tab으로 와서 Enter/Space = 순환, ↑/↓ = 한 칸.
+  useEffect(() => {
+    const el = handleRef.current as unknown as HTMLElement | null;
+    if (Platform.OS !== 'web' || !el?.addEventListener) return;
+    const onKey = (e: KeyboardEvent): void => {
+      const next =
+        e.key === 'ArrowUp' ? stepSnap(current.current, 1, snapsRef.current)
+        : e.key === 'ArrowDown' ? stepSnap(current.current, -1, snapsRef.current)
+        : e.key === 'Enter' || e.key === ' ' ? cycleSnap(current.current, snapsRef.current)
+        : null;
+      if (next === null) return;
+      e.preventDefault();
+      moveTo(next);
+    };
+    el.addEventListener('keydown', onKey);
+    return () => el.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Animated.View style={[styles.sheet, { height: sheetH }]}>
       <View
         {...pan.panHandlers}
+        ref={handleRef}
         style={[styles.handleZone, NO_TOUCH_ACTION]}
         accessibilityRole="adjustable"
         accessibilityLabel="시트 높이 조절"
+        accessibilityHint="위아래로 조절해 시트 높이를 바꿔요"
+        accessibilityActions={HANDLE_ACTIONS}
+        onAccessibilityAction={(e) =>
+          moveTo(stepSnap(current.current, e.nativeEvent.actionName === 'increment' ? 1 : -1, snapsRef.current))
+        }
+        {...WEB_TAB_STOP}
       >
         <View style={styles.handle} />
       </View>

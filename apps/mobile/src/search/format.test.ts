@@ -26,6 +26,10 @@ describe('placeSubtitle', () => {
   it('빈 항목은 구분자 없이 건너뛴다', () => {
     expect(placeSubtitle({ category: '', address: '서울' })).toBe('서울');
   });
+  it('주소 검색 결과: 제목과 같은 주소는 다시 쓰지 않는다', () => {
+    const addr = '경기 성남시 분당구 판교역로 235';
+    expect(placeSubtitle({ category: '주소', address: addr }, addr)).toBe('주소');
+  });
 });
 
 describe('splitMatch', () => {

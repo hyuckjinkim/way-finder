@@ -26,12 +26,14 @@ const proxyOrigin = originOf(proxyBaseUrl);
 
 export default function Root({ children }: PropsWithChildren) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
         <meta name="theme-color" content="#1a73e8" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="preconnect" href="https://dapi.kakao.com" crossOrigin="anonymous" />

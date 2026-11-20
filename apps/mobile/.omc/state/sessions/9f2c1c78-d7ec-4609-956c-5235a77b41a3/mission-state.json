@@ -1,0 +1,139 @@
+{
+  "updatedAt": "2026-11-20T15:30:34.371Z",
+  "missions": [
+    {
+      "id": "session:9f2c1c78-d7ec-4609-956c-5235a77b41a3:none",
+      "source": "session",
+      "name": "none",
+      "objective": "Session mission",
+      "createdAt": "2026-11-17T19:42:53.231Z",
+      "updatedAt": "2026-11-20T15:30:34.371Z",
+      "status": "done",
+      "workerCount": 8,
+      "taskCounts": {
+        "total": 8,
+        "pending": 0,
+        "blocked": 0,
+        "inProgress": 0,
+        "completed": 8,
+        "failed": 0
+      },
+      "agents": [
+        {
+          "name": "r1-search:ar1-sea",
+          "role": "r1-search",
+          "ownership": "ar1-search-0e286303fab7dbac",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T19:45:30.017Z"
+        },
+        {
+          "name": "r2-benchmark:ar2-ben",
+          "role": "r2-benchmark",
+          "ownership": "ar2-benchmark-ff7df7f5ef1b5a00",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T19:45:25.786Z"
+        },
+        {
+          "name": "r3-colors:ar3-col",
+          "role": "r3-colors",
+          "ownership": "ar3-colors-5933a9b9ef7fbe03",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T19:45:16.488Z"
+        },
+        {
+          "name": "c4-camera:ac4-cam",
+          "role": "c4-camera",
+          "ownership": "ac4-camera-805b68303bfa61cd",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T19:44:38.018Z"
+        },
+        {
+          "name": "c5-routeviz:ac5-rou",
+          "role": "c5-routeviz",
+          "ownership": "ac5-routeviz-bc67a566e2fd33e9",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T19:44:06.621Z"
+        },
+        {
+          "name": "c6-infra:ac6-inf",
+          "role": "c6-infra",
+          "ownership": "ac6-infra-f026d43aba90282b",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T19:44:58.150Z"
+        },
+        {
+          "name": "c7-gaps:ac7-gap",
+          "role": "c7-gaps",
+          "ownership": "ac7-gaps-b1cbd867ee2efcfe",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-17T19:45:21.744Z"
+        },
+        {
+          "name": "code-reviewer:a6c6f8a",
+          "role": "code-reviewer",
+          "ownership": "a6c6f8a209ff8dfa9",
+          "status": "done",
+          "currentStep": null,
+          "latestUpdate": "completed",
+          "completedSummary": null,
+          "updatedAt": "2026-11-20T15:30:34.371Z"
+        }
+      ],
+      "timeline": [
+        {
+          "id": "session-stop:ar2-benchmark-ff7df7f5ef1b5a00:2026-11-17T19:45:25.786Z",
+          "at": "2026-11-17T19:45:25.786Z",
+          "kind": "completion",
+          "agent": "r2-benchmark:ar2-ben",
+          "detail": "completed",
+          "sourceKey": "session-stop:ar2-benchmark-ff7df7f5ef1b5a00"
+        },
+        {
+          "id": "session-stop:adfda270323ad7579:2026-11-17T19:45:30.017Z",
+          "at": "2026-11-17T19:45:30.017Z",
+          "kind": "completion",
+          "agent": "r1-search:ar1-sea",
+          "detail": "completed",
+          "sourceKey": "session-stop:adfda270323ad7579"
+        },
+        {
+          "id": "session-start:a6c6f8a209ff8dfa9:2026-11-20T15:24:27.582Z",
+          "at": "2026-11-20T15:24:27.582Z",
+          "kind": "update",
+          "agent": "code-reviewer:a6c6f8a",
+          "detail": "started code-reviewer:a6c6f8a",
+          "sourceKey": "session-start:a6c6f8a209ff8dfa9"
+        },
+        {
+          "id": "session-stop:a6c6f8a209ff8dfa9:2026-11-20T15:30:34.371Z",
+          "at": "2026-11-20T15:30:34.371Z",
+          "kind": "completion",
+          "agent": "code-reviewer:a6c6f8a",
+          "detail": "completed",
+          "sourceKey": "session-stop:a6c6f8a209ff8dfa9"
+        }
+      ]
+    }
+  ]
+}

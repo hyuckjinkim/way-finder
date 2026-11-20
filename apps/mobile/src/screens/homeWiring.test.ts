@@ -19,9 +19,14 @@ describe('라우트 어댑터 배선', () => {
     expect(read('place/[id].tsx')).toMatch(/usePlaceDetailQuery\(id, hint\)/);
   });
 
-  it('검색: 선택 시 name/lat/lng가 실린 place URL로 이동하고 검색 기준 좌표를 넘긴다', () => {
+  it('검색: 선택 시 name/lat/lng가 실린 place URL을 push(뒤로가기 = 검색 결과)하고 검색 기준 좌표를 넘긴다', () => {
     const src = read('search.tsx');
-    expect(src).toMatch(/router\.replace\(placeHref\(place\)\)/);
+    expect(src).toMatch(/router\.push\(placeHref\(place\)\)/);
     expect(src).toMatch(/<SearchScreen\b[^>]*\bnear=\{near\}/s);
+  });
+
+  it('아래에 깔린 패널(검색·장소)은 덮이면 숨긴다 — 카드가 겹쳐 비치지 않게', () => {
+    expect(read('search.tsx')).toMatch(/hidden=\{!isFocused\}/);
+    expect(read('place/[id].tsx')).toMatch(/hidden=\{!isFocused\}/);
   });
 });

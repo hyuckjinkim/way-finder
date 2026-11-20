@@ -5,11 +5,14 @@
  * GestureHandlerRootView와 SafeAreaProvider는 네이티브 제스처·안전 영역의 필수 래퍼.
  */
 import React, { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Platform } from 'react-native';
+import { Stack, usePathname, useRouter } from 'expo-router';
+import Head from 'expo-router/head';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { installWebFocusStyle } from '../src/components/webFocus';
+import { isOverlayPath } from '../src/components/sheetSnap';
 
 // 딥링크·새로고침으로 /search 등에 바로 들어와도 홈 지도가 아래에 깔리도록.
 export const unstable_settings = { initialRouteName: 'index' };
@@ -24,8 +27,27 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWind
 export default function RootLayout() {
   // 웹 입력창 기본 포커스 outline(주황) 대신 브랜드 테두리 — 네이티브/SSR에선 no-op.
   useEffect(() => installWebFocusStyle(), []);
+
+  // 웹 키보드: Esc = 맨 위 패널(검색·장소·경로 입력) 닫기. 화면이 먼저 처리했으면(preventDefault) 양보.
+  const pathname = usePathname();
+  const router = useRouter();
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isOverlayPath(pathname)) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+      e.preventDefault();
+      if (router.canGoBack()) router.back();
+      else router.replace('/');
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [pathname, router]);
   return (
     <QueryClientProvider client={queryClient}>
+      {/* expo-router가 SSR에 빈 helmet <title>을 먼저 넣어 +html의 title이 가려진다 — 여기서 채운다. */}
+      <Head>
+        <title>Wayfinder 지도</title>
+      </Head>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider>
           <Stack>
@@ -42,7 +64,7 @@ export default function RootLayout() {
           />
           <Stack.Screen
             name="route/result"
-            options={{ title: '경로 결과', headerShown: true }}
+            options={{ title: '경로 결과', headerShown: false }}
           />
           <Stack.Screen
             name="route/nav"

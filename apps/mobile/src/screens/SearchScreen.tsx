@@ -8,13 +8,14 @@
  * 데이터는 PlaceProvider 계약으로 주입. 라우트 배선·실 서비스 연결은 app/search.tsx.
  * **구글 데이터 요청 없음**(§11 lazy 방어선 — 검색은 카카오/구글 장소 리스트만).
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   FlatList,
+  Platform,
   StyleSheet,
 } from 'react-native';
 import type { CameraState, LatLng, Place } from '@wayfinder/shared';
@@ -25,6 +26,28 @@ import { placeSubtitle, splitMatch } from '../search/format.js';
 import { pushRecent, recentStore, removeRecent } from '../search/recentSearches.js';
 
 export const SEARCH_PLACEHOLDER = '장소·주소 검색';
+// 결과·최근 검색 행 공통 표식(웹 data-testid) — 방향키 이동 대상.
+const ROW_ID = 'search-row';
+
+/** 웹 키보드: 입력창·행에서 ↑/↓로 행 사이 이동(맨 위에서 ↑ = 입력창). Enter는 행(Pressable)이 직접 처리. */
+function useArrowNavigation(rootRef: React.RefObject<View | null>): void {
+  useEffect(() => {
+    const root = rootRef.current as unknown as HTMLElement | null;
+    if (Platform.OS !== 'web' || !root?.addEventListener) return;
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.key !== 'ArrowDown' && e.key !== 'ArrowUp') || e.isComposing) return;
+      const rows = [...root.querySelectorAll<HTMLElement>(`[data-testid="${ROW_ID}"]`)];
+      if (rows.length === 0) return;
+      e.preventDefault();
+      const at = rows.indexOf(document.activeElement as HTMLElement);
+      const next = at + (e.key === 'ArrowDown' ? 1 : -1);
+      if (next < 0) root.querySelector('input')?.focus();
+      else rows[Math.min(next, rows.length - 1)]!.focus();
+    };
+    root.addEventListener('keydown', onKey);
+    return () => root.removeEventListener('keydown', onKey);
+  }, [rootRef]);
+}
 
 export interface SearchScreenProps {
   /** 검색 공급자 (기본: 데모 모드 mock provider). */
@@ -46,6 +69,9 @@ export function SearchScreen({
   const [query, setQuery] = useState('');
   const [recents, setRecents] = useState<string[]>(() => recentStore.load());
   const { results, status, setQuery: runSearch } = usePlaceSearch(provider, near);
+  const rootRef = useRef<View>(null);
+  const inputRef = useRef<TextInput>(null);
+  useArrowNavigation(rootRef);
 
   const handleChange = (text: string): void => {
     setQuery(text);
@@ -78,20 +104,39 @@ export function SearchScreen({
 
   const showRecents = query.trim().length === 0;
 
+  // Enter: 결과가 있으면 첫 결과를 연다.
+  const handleSubmit = (): void => {
+    if (!showRecents && results[0]) handleSelect(results[0]);
+    else remember(query);
+  };
+
+  const clear = (): void => {
+    handleChange('');
+    inputRef.current?.focus();
+  };
+
   return (
-    <View style={styles.root}>
+    <View style={styles.root} ref={rootRef}>
       <View style={styles.searchBar}>
-        <TextInput
-          style={styles.input}
-          value={query}
-          onChangeText={handleChange}
-          onSubmitEditing={() => remember(query)}
-          placeholder={SEARCH_PLACEHOLDER}
-          placeholderTextColor="#6b7280"
-          autoFocus
-          returnKeyType="search"
-          accessibilityLabel="검색어 입력"
-        />
+        <View style={styles.inputWrap}>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            value={query}
+            onChangeText={handleChange}
+            onSubmitEditing={handleSubmit}
+            placeholder={SEARCH_PLACEHOLDER}
+            placeholderTextColor={PLACEHOLDER_COLOR}
+            autoFocus
+            returnKeyType="search"
+            accessibilityLabel="검색어 입력"
+          />
+          {query ? (
+            <Pressable onPress={clear} accessibilityRole="button" accessibilityLabel="검색어 지우기" style={styles.clear}>
+              <Text style={styles.clearText}>✕</Text>
+            </Pressable>
+          ) : null}
+        </View>
         {onCancel ? (
           <Pressable
             onPress={onCancel}
@@ -114,6 +159,7 @@ export function SearchScreen({
           renderItem={({ item }) => (
             <View style={styles.recentRow}>
               <Pressable
+                testID={ROW_ID}
                 style={styles.recentMain}
                 onPress={() => handleChange(item)}
                 accessibilityRole="button"
@@ -144,6 +190,7 @@ export function SearchScreen({
           }
           renderItem={({ item }) => (
             <Pressable
+              testID={ROW_ID}
               style={styles.row}
               onPress={() => handleSelect(item)}
               accessibilityRole="button"
@@ -157,7 +204,7 @@ export function SearchScreen({
                 ))}
               </Text>
               <Text style={styles.sub} numberOfLines={1}>
-                {placeSubtitle(item)}
+                {placeSubtitle(item, item.name)}
               </Text>
             </Pressable>
           )}
@@ -173,6 +220,9 @@ const EMPTY_TEXT = {
   error: '검색에 실패했어요. 잠시 후 다시 시도해 주세요.',
 } as const;
 
+// #f2f3f5 입력 배경 위 5.5:1 (WCAG AA 4.5 이상; 이전 #6b7280은 4.39).
+export const PLACEHOLDER_COLOR = '#5f6368';
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#fff' },
   searchBar: {
@@ -183,15 +233,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#e5e7eb',
   },
+  inputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f2f3f5', borderRadius: 8 },
   input: {
     flex: 1,
     minHeight: 44,
-    backgroundColor: '#f2f3f5',
     borderRadius: 8,
     paddingHorizontal: 12,
     fontSize: 16,
     color: '#111',
   },
+  clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  clearText: { fontSize: 14, color: '#4b5563' },
   cancel: { minWidth: 44, minHeight: 44, paddingLeft: 12, justifyContent: 'center', alignItems: 'flex-end' },
   cancelText: { fontSize: 15, color: '#1a73e8' },
   sectionTitle: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4, fontSize: 13, fontWeight: '600', color: '#6b7280' },

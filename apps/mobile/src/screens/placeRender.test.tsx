@@ -30,6 +30,12 @@ describe('PlaceSheetStatus', () => {
     expect(html).toContain('aria-label="다시 시도"');
     expect(html).toContain('aria-label="닫기"');
   });
+  it('없는 장소(404)면 해요체 안내와 닫기만 — 다시 시도 없음', () => {
+    const html = render(<PlaceSheetStatus state="notFound" />);
+    expect(html).toContain('찾을 수 없어요');
+    expect(html).not.toContain('다시 시도');
+    expect(html).toContain('aria-label="닫기"');
+  });
   it('로딩 중이면 다시 시도 없이 닫기만', () => {
     const html = render(<PlaceSheetStatus name="강남역" state="loading" />);
     expect(html).not.toContain('다시 시도');

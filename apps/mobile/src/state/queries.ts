@@ -40,6 +40,8 @@ export function searchQueryOptions(
     queryFn: () => search(query),
     enabled: query.trim().length > 0,
     staleTime: 30_000, // 30초
+    // 프록시는 공급자 실패를 502로 알린다 — 한 번만 더 해 보고 에러 상태를 보인다(기본 3회는 공급자를 두드림).
+    retry: 1,
   };
 }
 
