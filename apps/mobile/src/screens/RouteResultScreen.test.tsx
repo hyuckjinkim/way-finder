@@ -309,3 +309,54 @@ describe('RouteResultScreen — B1 결과 화면 정리', () => {
     expect(html).toContain('카카오맵에서 보기');
   });
 });
+
+describe('RouteResultScreen — F2 공유·F3 앱 길안내·F4 정렬/필터 (웹)', () => {
+  const subwayOnly = {
+    ...TRANSIT_CHAIN,
+    legs: TRANSIT_CHAIN.legs.filter((l) => l.transit?.lineType !== 'bus'),
+    totalDurationSec: 60,
+  };
+  const withAlt = { ...TRANSIT_CHAIN, alternatives: [subwayOnly] };
+
+  it('대안이 있으면 정렬·필터 칩, 기본 최소시간이라 더 빠른 대안이 선택(단계 목록 펼침)', () => {
+    const html = render(<RouteResultScreen route={withAlt} />);
+    for (const label of ['최소시간', '최소환승', '최소도보', '전체', '지하철만', '버스만']) expect(html).toContain(label);
+    // 선택 경로(첫 카드)만 단계 목록을 펼친다 — 지하철만 대안이 위로 와서 402번(버스)은 단계 목록에 없다.
+    expect(html.indexOf('경로 1,')).toBeLessThan(html.indexOf('경로 2,'));
+    expect(html).not.toContain('402번');
+  });
+
+  it('경로가 하나면 칩 없음', () => {
+    expect(render(<RouteResultScreen route={TRANSIT_CHAIN} />)).not.toContain('최소환승');
+  });
+
+  it('웹: 안내 시작 대신 카카오맵·네이버지도 안내 버튼, share + 복사 가능하면 공유 버튼', () => {
+    const stops = [TRANSIT_CHAIN.legs[0]!.start, TRANSIT_CHAIN.legs[TRANSIT_CHAIN.legs.length - 1]!.end];
+    const share = { title: '경로 결과', text: 'A → B', url: 'https://wf.example/route/result?o=1,2,A' };
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) Mobile',
+      clipboard: { writeText: vi.fn() },
+    });
+    try {
+      const html = render(<RouteResultScreen route={TRANSIT_CHAIN} stops={stops} share={share} />);
+      expect(html).toContain('카카오맵으로 안내');
+      expect(html).toContain('네이버지도로 안내');
+      expect(html).toContain('경로 공유');
+      expect(render(<RouteResultScreen route={TRANSIT_CHAIN} stops={stops} />)).not.toContain('경로 공유');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('웹 데스크톱: 네이버는 경로를 넘길 웹 URL이 없어 카카오맵 버튼만', () => {
+    const stops = [TRANSIT_CHAIN.legs[0]!.start, TRANSIT_CHAIN.legs[TRANSIT_CHAIN.legs.length - 1]!.end];
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130' });
+    try {
+      const html = render(<RouteResultScreen route={TRANSIT_CHAIN} stops={stops} />);
+      expect(html).toContain('카카오맵으로 안내');
+      expect(html).not.toContain('네이버지도로 안내');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

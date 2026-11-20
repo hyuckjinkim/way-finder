@@ -33,7 +33,9 @@ const WALK_REQ: RouteRequest = {
   mode: 'walk',
 };
 
-describe('RouteService — 데모 모드', () => {
+// 첫 테스트가 resetModules 직후 RouteService 의존성 전체를 콜드 import한다 — WSL(/mnt/d)에서
+// 패키지 병렬 실행 부하가 걸리면 기본 5s를 넘겨 간헐 실패했다(단독 실행은 통과).
+describe('RouteService — 데모 모드', { timeout: 20_000 }, () => {
   beforeEach(async () => {
     vi.resetModules();
     // 데모 모드로 재구성

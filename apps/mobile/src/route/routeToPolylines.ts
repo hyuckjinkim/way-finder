@@ -87,6 +87,27 @@ export function routeToPolylines(route: Route, stops?: LatLng[]): MapPolyline[] 
   if (last?.mode === 'transit' && dest && haversineDistanceM(last.end, dest) > STOP_GAP_M) {
     lines.push(connector('walk-destination', last.end, dest));
   }
+  // 경유지: 구간별 탐색을 이어 붙인 경로라 구간 경계(leg i 끝 → leg i+1 시작)에도 도보가 빠져 있다.
+  // Route에 경계 정보가 없으니 경유지마다 (끝→경유지 + 경유지→다음 시작)이 최소인 경계를 순서대로 고른다.
+  let from = 0;
+  (stops?.slice(1, -1) ?? []).forEach((w, j) => {
+    let best = -1;
+    let bestGap = Infinity;
+    for (let i = from; i < route.legs.length - 1; i++) {
+      const gap = haversineDistanceM(route.legs[i]!.end, w) + haversineDistanceM(w, route.legs[i + 1]!.start);
+      if (gap < bestGap) [best, bestGap] = [i, gap];
+    }
+    if (best < 0) return;
+    from = best + 1;
+    const before = route.legs[best]!;
+    const after = route.legs[best + 1]!;
+    if (before.mode === 'transit' && haversineDistanceM(before.end, w) > STOP_GAP_M) {
+      lines.push(connector(`walk-wp${j}-in`, before.end, w));
+    }
+    if (after.mode === 'transit' && haversineDistanceM(w, after.start) > STOP_GAP_M) {
+      lines.push(connector(`walk-wp${j}-out`, w, after.start));
+    }
+  });
   return lines;
 }
 

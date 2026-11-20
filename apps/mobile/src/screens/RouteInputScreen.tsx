@@ -19,6 +19,8 @@ import {
   FlatList,
   ScrollView,
   StyleSheet,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
 } from 'react-native';
 import type { Place, RouteRequest, LatLng, TravelMode } from '@wayfinder/shared';
 import type { Capabilities } from '@wayfinder/shared/api';
@@ -148,6 +150,22 @@ export function RouteInputScreen({
       runSearch(text);
     },
     [runSearch],
+  );
+
+  const closeSearch = useCallback(() => {
+    setFocusedField(null);
+    setSearchQuery('');
+    runSearch('');
+  }, [runSearch]);
+
+  // 웹 Esc: 검색만 닫는다(입력한 출발·도착·경유지 유지). preventDefault로 레이아웃의 "패널 닫기" Esc에 알린다.
+  const handleSearchKey = useCallback(
+    (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+      if (e.nativeEvent.key !== 'Escape' || (e.nativeEvent as { isComposing?: boolean }).isComposing) return;
+      e.preventDefault();
+      closeSearch();
+    },
+    [closeSearch],
   );
 
   const handleSelectPlace = useCallback(
@@ -333,17 +351,14 @@ export function RouteInputScreen({
               style={styles.searchInput}
               value={searchQuery}
               onChangeText={handleSearchChange}
+              onKeyPress={handleSearchKey}
               placeholder={searchPlaceholder}
               placeholderTextColor="#999"
               autoFocus
               accessibilityLabel={searchPlaceholder}
             />
             <Pressable
-              onPress={() => {
-                setFocusedField(null);
-                setSearchQuery('');
-                runSearch('');
-              }}
+              onPress={closeSearch}
               accessibilityRole="button"
               accessibilityLabel="검색 취소"
               style={styles.cancelBtn}

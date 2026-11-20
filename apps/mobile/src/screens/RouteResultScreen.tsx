@@ -8,7 +8,7 @@
  *   선택한 경로의 단계 목록을 펼치고, 지도는 선택 경로로 다시 그린다.
  * - <MapView>는 src/map/MapView import만 (수정 금지, §8 D4 경계).
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -50,6 +50,13 @@ import {
   type LinkStop,
 } from '../route/routeResultView.js';
 import { isModeUnavailable } from '../services/RouteService.js';
+import { arrangeRoutes, FILTER_LABEL, SORT_LABEL, type RouteFilter, type RouteSort } from '../route/routeSort.js';
+import { deviceFromUA, handoffPlan, openHandoff, type HandoffApp } from '../route/appHandoff.js';
+import { SHARE_TOAST } from '../route/routeShare.js';
+import { canShare, sharePlace, type SharePayload } from '../share/share';
+import { Toast } from '../components/Toast';
+
+const HANDOFF_LABEL: Record<HandoffApp, string> = { kakao: '카카오맵으로 안내', naver: '네이버지도로 안내' };
 
 /** 선호 프로필 → 한국어 라벨 (C3 로컬 맵 — B1 routePreference.ts import 금지). */
 const PREFERENCE_LABEL: Record<RoutePreference, string> = {
@@ -81,6 +88,8 @@ export interface RouteResultScreenProps {
   origin?: LinkStop;
   destination?: LinkStop;
   mode?: TravelMode;
+  /** 경로 공유 페이로드(웹). 공유 시트 또는 링크 복사가 가능할 때만 "공유" 버튼. */
+  share?: SharePayload;
 }
 
 /** 오류 → 사용자 안내 문구. 501(프록시 MODE_UNAVAILABLE)은 이동수단 미지원, 대중교통은 TransitError 코드별. */
@@ -177,6 +186,7 @@ export function RouteResultScreen({
   origin,
   destination,
   mode,
+  share,
 }: RouteResultScreenProps): React.ReactElement {
   const win = useWindowDimensions();
   // 웹 정적 렌더(SSR)는 폭을 모르므로 마운트 후 실제 폭으로 여백을 정한다(OverlayPanel과 동일 이유).
@@ -184,7 +194,12 @@ export function RouteResultScreen({
   useEffect(() => setMounted(true), []);
   const isDesktop = mounted && panelPlacement(win.width) === 'side';
 
-  const [selected, setSelected] = useState(0);
+  // 선택은 경로 객체로 — 정렬·필터로 순서가 바뀌어도 유지, 걸러지거나 새 결과가 오면 첫 경로로.
+  const [picked, setPicked] = useState<Route | null>(null);
+  const [sort, setSort] = useState<RouteSort>('time');
+  const [filter, setFilter] = useState<RouteFilter>('all');
+  const [toast, setToast] = useState<string | null>(null);
+  const dismissToast = useCallback(() => setToast(null), []);
   // 도착 예정 시각이 화면을 오래 열어 둬도 맞도록 1분마다 갱신.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -192,16 +207,14 @@ export function RouteResultScreen({
     return () => clearInterval(id);
   }, []);
 
-  // 새 탐색 결과가 오면 첫 경로부터.
-  useEffect(() => setSelected(0), [route]);
-
   const firstStop = stops?.[0];
   const lastStop = stops?.[stops.length - 1];
   // 경유지 있는 왕복(A→W→A)은 정상 — 경유지 없이 출발=도착일 때만.
   const sameStops = stops?.length === 2 && isSameStop(stops[0]!, stops[1]!);
 
   const routes = useMemo(() => (route ? [route, ...(route.alternatives ?? [])] : []), [route]);
-  const active = sameStops ? null : (routes[selected] ?? route);
+  const visible = useMemo(() => arrangeRoutes(routes, sort, filter), [routes, sort, filter]);
+  const active = sameStops ? null : picked && visible.includes(picked) ? picked : (visible[0] ?? null);
   const customMeta = active ? routeSummary(active).customMeta : undefined;
 
   useEffect(() => {
@@ -211,8 +224,8 @@ export function RouteResultScreen({
   const polylines = useMemo(() => (active ? routeToPolylines(active, stops) : []), [active, stops]);
   const markers = useMemo(() => (active ? routeMarkers(active, stops) : []), [active, stops]);
   const bounds = useMemo(
-    () => (active ? boundsForRoute(active.legs, firstStop && lastStop ? [firstStop, lastStop] : []) : null),
-    [active, firstStop, lastStop],
+    () => (active ? boundsForRoute(active.legs, stops ?? []) : null),
+    [active, stops],
   );
   const insets = useMemo(() => fitInsets(isDesktop, win.height), [isDesktop, win.height]);
   const fitTo = useMemo(() => (bounds ? { bounds, padding: insets } : undefined), [bounds, insets]);
@@ -228,6 +241,36 @@ export function RouteResultScreen({
   const isLongWalk =
     !!active && active.legs.every((l) => l.mode === 'walk') && active.totalDurationSec > LONG_WALK_SEC;
 
+  // navigator.share는 사용자 제스처 안에서만 열린다 — 핸들러에서 바로 호출.
+  const onShare = useCallback(() => {
+    if (share) void sharePlace(share).then((r) => setToast(SHARE_TOAST[r]));
+  }, [share]);
+  const linkOrigin = linkStop(origin, firstStop);
+  const linkDestination = linkStop(destination, lastStop);
+  const onHandoff = (app: HandoffApp): void => {
+    if (!linkOrigin || !linkDestination) return;
+    openHandoff(
+      handoffPlan(app, deviceFromUA(navigator.userAgent), {
+        origin: linkOrigin,
+        destination: linkDestination,
+        waypoints: stops?.slice(1, -1) ?? [],
+        mode: mode ?? 'transit',
+        appname: window.location.host,
+      }),
+    );
+  };
+  const chip = (label: string, isOn: boolean, onPress: () => void): React.ReactElement => (
+    <Pressable
+      key={label}
+      style={[styles.chip, isOn && styles.chipOn]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isOn }}
+    >
+      <Text style={[styles.chipText, isOn && styles.chipTextOn]}>{label}</Text>
+    </Pressable>
+  );
+
   return (
     <View style={styles.root}>
       {/* OverlayPanel 웹 통과 CSS가 이 루트까지 pointer-events:none을 걸므로 지도는 명시적으로 auto. */}
@@ -237,24 +280,42 @@ export function RouteResultScreen({
 
       <OverlayPanel initialSnap={RESULT_SHEET_SNAP} title="경로 결과">
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-          {onBack && (
-            <Pressable
-              style={styles.backRow}
-              onPress={onBack}
-              accessibilityRole="button"
-              accessibilityLabel="뒤로 가기"
-            >
-              <Text style={styles.backIcon}>←</Text>
-              <Text style={styles.backText}>경로 수정</Text>
-            </Pressable>
-          )}
+          <View style={styles.topRow}>
+            {onBack && (
+              <Pressable
+                style={styles.backRow}
+                onPress={onBack}
+                accessibilityRole="button"
+                accessibilityLabel="뒤로 가기"
+              >
+                <Text style={styles.backIcon}>←</Text>
+                <Text style={styles.backText}>경로 수정</Text>
+              </Pressable>
+            )}
+            {/* OverlayPanel은 마운트 후에만 내용을 그려 canShare(navigator)가 하이드레이션을 깨지 않는다. */}
+            {share && canShare() && (
+              <Pressable style={styles.shareBtn} onPress={onShare} accessibilityRole="button" accessibilityLabel="경로 공유">
+                <Text style={styles.backText}>공유</Text>
+              </Pressable>
+            )}
+          </View>
           {sameStops ? (
             <Text style={styles.emptyText} accessibilityRole="alert">
               출발지와 도착지가 같아요. 다른 도착지를 골라 주세요.
             </Text>
-          ) : active ? (
+          ) : route ? (
             <>
-              {routes.map((r, idx) => {
+              {routes.length > 1 && (
+                <View style={styles.chips} accessibilityLabel="경로 정렬·필터">
+                  {(Object.keys(SORT_LABEL) as RouteSort[]).map((k) => chip(SORT_LABEL[k], sort === k, () => setSort(k)))}
+                  <View style={styles.chipGap} />
+                  {(Object.keys(FILTER_LABEL) as RouteFilter[]).map((k) =>
+                    chip(FILTER_LABEL[k], filter === k, () => setFilter(k)),
+                  )}
+                </View>
+              )}
+              {visible.length === 0 && <Text style={styles.emptyText}>조건에 맞는 경로가 없어요.</Text>}
+              {visible.map((r, idx) => {
                 const isActive = r === active;
                 const s = routeSummary(r);
                 const walk = walkMinutes(r);
@@ -273,7 +334,7 @@ export function RouteResultScreen({
                   <Pressable
                     key={idx}
                     style={[styles.card, isActive && styles.cardActive]}
-                    onPress={() => setSelected(idx)}
+                    onPress={() => setPicked(r)}
                     accessibilityRole="button"
                     accessibilityState={{ selected: isActive }}
                     accessibilityLabel={a11y}
@@ -311,7 +372,7 @@ export function RouteResultScreen({
               )}
 
               {/* 안내 시작 — 웹은 GPS 안내 불가라 숨긴다. */}
-              {onStartNav && canStartNav(Platform.OS) && (
+              {active && onStartNav && canStartNav(Platform.OS) && (
                 <Pressable
                   style={styles.startNavBtn}
                   onPress={onStartNav}
@@ -320,6 +381,26 @@ export function RouteResultScreen({
                 >
                   <Text style={styles.startNavText}>안내 시작</Text>
                 </Pressable>
+              )}
+              {/* 웹은 대신 지도 앱으로 넘긴다(앱 없으면 웹 길찾기). */}
+              {active && Platform.OS === 'web' && linkOrigin && linkDestination && (
+                <View style={styles.handoffRow}>
+                  {/* 데스크톱 네이버는 경로를 넘길 웹 URL이 없어 빈 지도만 열린다 → 카카오만. */}
+                  {(typeof navigator !== 'undefined' && deviceFromUA(navigator.userAgent) === 'desktop'
+                    ? (['kakao'] as const)
+                    : (['kakao', 'naver'] as const)
+                  ).map((app) => (
+                    <Pressable
+                      key={app}
+                      style={styles.handoffBtn}
+                      onPress={() => onHandoff(app)}
+                      accessibilityRole="link"
+                      accessibilityLabel={HANDOFF_LABEL[app]}
+                    >
+                      <Text style={styles.handoffText}>{HANDOFF_LABEL[app]}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               )}
             </>
           ) : (
@@ -332,8 +413,8 @@ export function RouteResultScreen({
                   error={error}
                   onRetry={onRetry}
                   onSwitchToWalk={onSwitchToWalk}
-                  origin={linkStop(origin, firstStop)}
-                  destination={linkStop(destination, lastStop)}
+                  origin={linkOrigin}
+                  destination={linkDestination}
                   mode={mode}
                 />
               ) : null}
@@ -341,6 +422,7 @@ export function RouteResultScreen({
           )}
         </ScrollView>
       </OverlayPanel>
+      {toast ? <Toast message={toast} onDismiss={dismissToast} /> : null}
     </View>
   );
 }
@@ -351,6 +433,25 @@ const styles = StyleSheet.create({
   mapWrap: { flex: 1, pointerEvents: 'auto' } as ViewStyle,
   scroll: { flexShrink: 1 },
   scrollBody: { paddingHorizontal: 16, paddingBottom: 16 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  shareBtn: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, justifyContent: 'center', alignItems: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  chipGap: { width: 6 },
+  chip: { minHeight: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: '#d1d5db', justifyContent: 'center' },
+  chipOn: { borderColor: '#1565c0', backgroundColor: '#1565c0' },
+  chipText: { fontSize: 13, color: '#374151' },
+  chipTextOn: { color: '#fff', fontWeight: '700' },
+  handoffRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
+  handoffBtn: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1565c0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  handoffText: { color: '#1565c0', fontSize: 14, fontWeight: '700' },
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, alignSelf: 'flex-start', paddingRight: 12 },
   backIcon: { fontSize: 18, color: '#374151' },
   backText: { fontSize: 14, color: '#374151', fontWeight: '600' },

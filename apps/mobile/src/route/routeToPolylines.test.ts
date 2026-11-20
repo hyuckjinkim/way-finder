@@ -235,3 +235,33 @@ describe('routeToPolylines — 첫/끝 도보 연결선(카카오 대중교통)'
     expect(b.ne).toEqual({ lat: D.lat, lng: D.lng });
   });
 });
+
+describe('routeToPolylines — 경유지 구간 경계 도보 연결선', () => {
+  const ride = (start: { lat: number; lng: number }, end: { lat: number; lng: number }, lineName: string) => ({
+    mode: 'transit' as const, start, end, coords: [start, end], distanceM: 1, durationSec: 60,
+    transit: { lineName, lineType: 'subway' as const },
+  });
+  const S = { lat: 37.48, lng: 126.9 };
+  const X = { lat: 37.49, lng: 126.95 }; // 1구간 환승역(경유지와 멂)
+  const A1 = { lat: 37.5, lng: 127.0 }; // 1구간 하차 — 경유지에서 약 110 m
+  const W = { lat: 37.501, lng: 127.0 };
+  const B1 = { lat: 37.501, lng: 127.002 }; // 2구간 승차 — 경유지에서 약 180 m
+  const D = { lat: 37.55, lng: 127.05 };
+  // 구간1: S→X→A1 (환승 1), 구간2: B1→D
+  const route = { legs: [ride(S, X, '1'), ride(X, A1, '2'), ride(B1, D, '3')], totalDurationSec: 180, totalDistanceM: 3 };
+
+  it('환승 경계가 아니라 경유지 경계에 하차→경유지, 경유지→승차 점선', () => {
+    const lines = routeToPolylines(route, [S, W, D]);
+    expect(lines.filter((l) => l.id.startsWith('walk-wp'))).toEqual([
+      expect.objectContaining({ id: 'walk-wp0-in', coords: [A1, W], dashed: true }),
+      expect.objectContaining({ id: 'walk-wp0-out', coords: [W, B1], dashed: true }),
+    ]);
+  });
+
+  it('경계가 경유지와 30 m 이내거나 도보 leg면 연결선 없음', () => {
+    expect(routeToPolylines(route, [S, A1, D]).some((l) => l.id === 'walk-wp0-in')).toBe(false);
+    const walkAfter = { ...route, legs: [route.legs[0]!, route.legs[1]!, { ...route.legs[2]!, mode: 'walk' as const }] };
+    expect(routeToPolylines(walkAfter, [S, W, D]).map((l) => l.id)).toContain('walk-wp0-in');
+    expect(routeToPolylines(walkAfter, [S, W, D]).map((l) => l.id)).not.toContain('walk-wp0-out');
+  });
+});

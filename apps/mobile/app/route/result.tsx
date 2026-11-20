@@ -8,7 +8,7 @@
  * QueryClientProvider는 app/_layout.tsx가 제공한다.
  */
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter, type Href } from 'expo-router';
 import { RouteResultScreen } from '../../src/screens/RouteResultScreen';
 import { useRouteStore } from '../../src/state/routeStore';
@@ -16,6 +16,7 @@ import { useRouteQuery } from '../../src/state/routeQueries';
 import { parseRouteParams, routeQuery } from '../../src/route/routeUrl';
 import { resolveRouteInput } from '../../src/route/routeInput';
 import { isSameStop } from '../../src/route/routeResultView';
+import { buildRouteShare } from '../../src/route/routeShare';
 
 const NO_STOPS: never[] = [];
 
@@ -84,6 +85,23 @@ export default function RouteResultRoute() {
   // URL mode가 스토어보다 우선이라 URL을 바꾼다(스토어 폴백 진입이어도 url.mode가 이긴다).
   const onSwitchToWalk = React.useCallback(() => router.setParams({ mode: 'walk' }), [router]);
 
+  // 웹 Esc = "경로 수정"(입력으로). 이 화면이 맨 위일 때만 — /route/nav 아래에 깔려 있을 땐 양보.
+  React.useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || !navigation.isFocused()) return;
+      e.preventDefault();
+      onBack();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [navigation, onBack]);
+
+  // 정적 렌더(SSR)는 쿼리 없이 그려져 직접 진입 시 하이드레이션 #418 — URL 기반 화면은 마운트 후에만.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  if (!mounted) return <View style={styles.blank} />;
+
   if (!input) {
     return (
       <View style={styles.missing}>
@@ -113,11 +131,13 @@ export default function RouteResultRoute() {
       origin={urlState.origin}
       destination={urlState.destination}
       mode={input.mode}
+      share={Platform.OS === 'web' ? buildRouteShare(urlState, input, window.location.origin) : undefined}
     />
   );
 }
 
 const styles = StyleSheet.create({
+  blank: { flex: 1 },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16, backgroundColor: '#fff' },
   missingText: { fontSize: 15, color: '#333', textAlign: 'center' },
   missingBtn: {
