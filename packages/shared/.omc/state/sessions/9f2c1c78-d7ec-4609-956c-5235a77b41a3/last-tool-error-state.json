@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /mnt/d/Workspace/wayfinder/apps/mobile && D=node_modules/@maplibre/maplibre-react-native; ls $D; grep -E \\\"export\\\" $D/lib/typescript/commonjs/src/index.d.ts | head -60; grep -rn \\\"dash...",
-  "error": "Exit code 2\nls: cannot access 'node_modules/@maplibre/maplibre-react-native': No such file or directory\nugrep: warning: node_modules/@maplibre/maplibre-react-native/lib/typescript/commonjs/src/index.d.ts: No such file or directory\nugrep: warning: node_modules/@maplibre/maplibre-react-native/lib/typescript/commonjs/src: No such file or directory\nls: cannot access 'node_modules/@maplibre/maplibre-react-native/lib/typescript/commonjs/src/components/camera/': No such file or directory",
-  "timestamp": "2026-11-17T23:02:44.954Z",
-  "retry_count": 2
-}

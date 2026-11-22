@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /mnt/d/Workspace/wayfinder; python3 - <<'EOF'\\np='README.md'\\ns=open(p,encoding='utf-8').read()\\nanchor=\\\"**웹 데모: https://wayfinder-awh.pages.dev** (프록시: `https://wayfinder-proxy.hyuckj...",
-  "error": "Exit code 144",
-  "timestamp": "2026-11-17T16:51:32.403Z",
-  "retry_count": 1
-}
