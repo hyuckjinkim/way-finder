@@ -32,7 +32,7 @@ import { placeFitBounds } from '../search/placeUrl';
 import { formatDistance } from '../search/format';
 
 /** 홈 칩(F5) — 카카오 category_group_code. */
-export const CATEGORY_CHIPS: ReadonlyArray<{ code: PlaceCategoryCode; label: string }> = [
+export const CATEGORY_CHIPS: readonly { code: PlaceCategoryCode; label: string }[] = [
   { code: 'CE7', label: '카페' },
   { code: 'CS2', label: '편의점' },
   { code: 'FD6', label: '음식점' },
@@ -41,7 +41,7 @@ export const CATEGORY_CHIPS: ReadonlyArray<{ code: PlaceCategoryCode; label: str
   { code: 'SW8', label: '지하철역' },
 ];
 
-const LAYER_TOGGLES: ReadonlyArray<{ key: keyof MapLayers; label: string }> = [
+const LAYER_TOGGLES: readonly { key: keyof MapLayers; label: string }[] = [
   { key: 'traffic', label: '교통정보' },
   { key: 'satellite', label: '위성' },
   { key: 'bicycle', label: '자전거' },

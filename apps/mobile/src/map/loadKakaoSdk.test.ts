@@ -7,7 +7,7 @@ type FakeScript = {
   onload?: () => void;
   onerror?: () => void;
   remove: () => void;
-  listeners: Record<string, Array<() => void>>;
+  listeners: Record<string, (() => void)[]>;
   addEventListener: (type: string, fn: () => void) => void;
 };
 

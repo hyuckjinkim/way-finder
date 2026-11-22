@@ -4,7 +4,7 @@ import { attachLongPress, dedupeLongPress, LONG_PRESS_MS } from './longPress.js'
 function fakeEl() {
   const target = new EventTarget();
   const el = Object.assign(target, { getBoundingClientRect: () => ({ left: 10, top: 20 }) });
-  const touch = (type: string, pts: Array<[number, number]>) =>
+  const touch = (type: string, pts: [number, number][]) =>
     el.dispatchEvent(Object.assign(new Event(type), { touches: pts.map(([clientX, clientY]) => ({ clientX, clientY })) }));
   return { el: el as unknown as HTMLElement, touch };
 }

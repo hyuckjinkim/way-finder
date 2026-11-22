@@ -91,7 +91,7 @@ gated('D3 라이브 Valhalla e2e — 프록시 실 모드 → 실 /route → 정
     expect(route.customMeta!.baselineDurationSec).toBeGreaterThan(0);
 
     // 라이브 증거 로깅(실행 기록용).
-    // eslint-disable-next-line no-console
+     
     console.log(
       `[D3 live] safe N=10 → ${route.totalDurationSec.toFixed(0)}s / ${route.totalDistanceM.toFixed(0)}m, ` +
         `baseline=${route.customMeta!.baselineDurationSec?.toFixed(0)}s, withinBudget=${route.customMeta!.withinBudget}`,
