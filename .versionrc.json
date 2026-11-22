@@ -1,0 +1,16 @@
+{
+  "tagPrefix": "v",
+  "header": "# Changelog\n\n`pnpm release`(commit-and-tag-version)가 커밋 이력(Conventional Commits)으로 갱신한다.\n0.7.0 이하는 정식 릴리즈 없이 진행된 커밋 이력을 단계(Phase)·작업일 경계로 나눠 버전을 사후 부여한 기록이다.\n",
+  "types": [
+    { "type": "feat", "section": "기능" },
+    { "type": "fix", "section": "수정" },
+    { "type": "perf", "section": "성능" },
+    { "type": "refactor", "section": "구조" },
+    { "type": "docs", "section": "문서" },
+    { "type": "chore", "hidden": true },
+    { "type": "test", "hidden": true },
+    { "type": "ci", "hidden": true },
+    { "type": "style", "hidden": true }
+  ],
+  "bumpFiles": [{ "filename": "package.json", "type": "json" }]
+}
