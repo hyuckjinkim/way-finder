@@ -12,7 +12,7 @@
 
 ## 검사
 
-- `pnpm typecheck && pnpm test` — CI(`.github/workflows/ci.yml`)와 같은 검사다. 비밀 검사는 `scripts/secret-scan.sh`.
+- `pnpm typecheck && pnpm lint && pnpm test` — CI(`.github/workflows/ci.yml`)와 같은 검사다. 린트 경고 29건(React Compiler 계열 22 등)은 알려진 것(`.styleguide` wayfinder §3). 비밀 검사는 `scripts/secret-scan.sh`.
 - 프록시의 실 API 테스트는 `services/proxy` 의 `vitest.e2e.config.ts`·`vitest.smoke.config.ts` 로만 돈다(키 필요).
 
 ## 비밀

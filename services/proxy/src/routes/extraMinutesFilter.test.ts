@@ -4,7 +4,7 @@
  * F1 `ValhallaProvider` 인터페이스를 **mock 주입**해 A lane 구현 대기 없이 검증.
  * 산술·경계(N=0, P>T+N 폴백 규약)·플래그·baseline 채움을 단언.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { applyExtraMinutesFilter } from './extraMinutesFilter.js';
 import type { ValhallaProvider } from './routeDirect.js';
 import type {

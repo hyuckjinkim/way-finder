@@ -4,7 +4,7 @@
  * index.test.ts 패턴: app.fetch(req, env, ctx) + vi.stubGlobal('fetch').
  * 데모 모드(키 없음)와 실 모드(fetch 모킹) × 지역(kr/global) × 모드 커버.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import app from '../index.js';
 import { routesPath } from '@wayfinder/shared/api';
 import type { Route } from '@wayfinder/shared';

@@ -179,7 +179,7 @@ describe('GET /v1/places/:id — graceful degradation (구글 fetch 실패)', ()
 
 describe('GET /v1/places/:id — 실 모드 구글 응답 정규화', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string | URL | Request, opts?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((url: string | URL | Request, _opts?: RequestInit) => {
       const urlStr = typeof url === 'string' ? url : url instanceof URL ? url.toString() : (url as Request).url;
       // 카카오 검색 (기본정보)
       if (urlStr.includes('dapi.kakao.com/v2/local')) {
