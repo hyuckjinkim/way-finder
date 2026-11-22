@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"cd /mnt/d/Workspace/wayfinder && bash scripts/secret-scan.sh | tail -1 && echo \\\"=== dry-run ===\\\" && (cd services/proxy && npx wrangler deploy --dry-run 2>&1 | tail -1) && echo \\\"=== web ...",
-  "error": "Exit code 1\n✅ 시크릿 스캔 통과 — 하드코딩 키 없음.\n=== dry-run ===\n--dry-run: exiting now.\n=== web export + expo-speech exclusion ===\nexport exit=1\n0",
-  "timestamp": "2026-06-08T13:36:59.010Z",
-  "retry_count": 1
-}

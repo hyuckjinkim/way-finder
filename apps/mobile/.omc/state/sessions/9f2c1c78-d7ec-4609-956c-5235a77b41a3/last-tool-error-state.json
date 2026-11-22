@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"pkill -f \\\"wrangler pages dev\\\" ; true\",\"description\":\"Stop wrangler dev server\"}",
-  "error": "Exit code 144",
-  "timestamp": "2026-11-20T15:27:41.107Z",
-  "retry_count": 1
-}
