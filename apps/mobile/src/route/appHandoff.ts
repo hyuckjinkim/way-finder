@@ -1,6 +1,6 @@
 /**
  * 앱으로 길안내 (F3) — 웹은 턴바이턴이 없으니 카카오맵·네이버지도 앱 스킴으로 넘기고, 없으면 웹으로 폴백.
- * 스킴 형식: docs/research_notes/지도앱 미구현 기능 우선순위/map-ux.md §4.
+ * 스킴 형식: docs/research/2026-11-20-지도앱-미구현-기능-우선순위/map-ux.md §4.
  */
 import type { LatLng, TravelMode } from '@wayfinder/shared';
 import { kakaoMapLink, type LinkStop } from './routeResultView.js';

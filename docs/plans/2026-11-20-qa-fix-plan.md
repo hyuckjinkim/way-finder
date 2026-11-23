@@ -2,7 +2,7 @@
 
 근거: 라이브 QA(폰 Pixel7 · 데스크톱 1440/1024/800), 코드 감사(24건), 리서치 4(대중교통·장소·지도UX·사용자 우선순위).
 - QA 원문·스크린샷: `/tmp/claude-1000/-mnt-d-Workspace/9f2c1c78-d7ec-4609-956c-5235a77b41a3/scratchpad/qa/{phone,desktop}-findings.md` (임시)
-- 리서치: `docs/research_notes/지도앱 미구현 기능 우선순위/`, 리포트 `docs/reports/지도앱 미구현 기능 우선순위.md`
+- 리서치: `docs/research/2026-11-20-지도앱-미구현-기능-우선순위/`, 리포트 `docs/reports/2026-11-20-지도앱-미구현-기능-우선순위.md`
 - 현재 e2e smoke 6/6 통과(2026-11-20, 쿼터 리셋 후).
 
 ## 핵심 발견 3가지
