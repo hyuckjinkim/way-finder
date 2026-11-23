@@ -28,6 +28,7 @@ import type { PlaceCategoryCode } from '@wayfinder/shared/api';
 import MapView from '../map/MapView';
 import { Toast } from '../components/Toast';
 import { CARD_INSET, CARD_WIDTH, SNAP_FRACTIONS, homeChrome, panelPlacement, type HomePanel } from '../components/sheetSnap';
+import { useHydrated } from '../components/useHydrated';
 import { placeFitBounds } from '../search/placeUrl';
 import { formatDistance } from '../search/format';
 
@@ -166,17 +167,17 @@ export function HomeScreen({
   const camera = controlledCamera ?? localCamera;
   const { width, height } = useWindowDimensions();
   // 웹 정적 렌더(SSR)는 창 크기 0으로 그린다 — 첫 클라이언트 렌더도 0으로 맞춰야 하이드레이션(#418)이 안 깨진다.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   const chrome = homeChrome(panel, mounted ? width : 0, mounted ? height : 0);
   const rootRef = useRef<View>(null);
   const phone = panelPlacement(mounted ? width : 0) === 'bottom';
   const sheetHeight = Math.round((mounted ? height : 0) * SNAP_FRACTIONS.peek);
 
-  // 레이어(F7) — 저장값은 마운트 후에만 읽는다(SSR 하이드레이션 일치).
-  const [layers, setLayers] = useState<MapLayers>({});
+  // 레이어(F7) — 저장값은 하이드레이션 뒤에만 읽는다(SSR 하이드레이션 일치). 사용자가 고르면 그 값.
+  const storedLayers = useMemo<MapLayers>(() => (mounted ? readStoredLayers() : {}), [mounted]);
+  const [pickedLayers, setLayers] = useState<MapLayers | null>(null);
+  const layers = pickedLayers ?? storedLayers;
   const [layersOpen, setLayersOpen] = useState(false);
-  useEffect(() => setLayers(readStoredLayers()), []);
   const toggleLayer = (key: keyof MapLayers): void => {
     const next = { ...layers, [key]: !layers[key] };
     setLayers(next);
@@ -208,8 +209,6 @@ export function HomeScreen({
 
   // 장소를 고르면 항상 '엿보기' 시트가 뜬다 → 그 여백으로 맞춘다. 좌표가 바뀔 때만 다시 계산
   // (패널이 바뀌거나 사용자가 지도를 옮긴 뒤 검색을 열어도 되돌아가지 않게).
-  const size = useRef({ width, height });
-  size.current = { width, height };
   const fitTo = useMemo(
     () =>
       focus
@@ -217,9 +216,9 @@ export function HomeScreen({
             bounds: placeFitBounds(focus),
             // 폰은 시트만큼 지도가 줄어드므로 시트 여백을 또 뺄 필요가 없다.
             padding: homeChrome(
-              panelPlacement(size.current.width) === 'bottom' ? 'none' : 'peek',
-              size.current.width,
-              size.current.height,
+              panelPlacement(width) === 'bottom' ? 'none' : 'peek',
+              width,
+              height,
             ).fitPadding,
           }
         : undefined,

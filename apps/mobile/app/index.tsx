@@ -115,15 +115,15 @@ export default function HomeRoute() {
 
   /** 내 위치를 구해 파란 점을 찍고, shouldMove()가 참이면 카메라도 옮긴다(거부·실패는 토스트). explicit = 버튼을 직접 누름. */
   const locate = useCallback(
-    async (shouldMove: () => boolean, explicit = false) => {
-      const result = await getUserLocation();
-      if (result.status !== 'ok') {
-        showNotice(!explicit ? LOCATION_NOTICE : result.status === 'denied' ? LOCATION_DENIED_HELP : LOCATION_ERROR);
-        return;
-      }
-      setUserLocation(result.coord);
-      if (shouldMove()) setCamera({ center: result.coord, zoom: USER_ZOOM });
-    },
+    (shouldMove: () => boolean, explicit = false) =>
+      getUserLocation().then((result) => {
+        if (result.status !== 'ok') {
+          showNotice(!explicit ? LOCATION_NOTICE : result.status === 'denied' ? LOCATION_DENIED_HELP : LOCATION_ERROR);
+          return;
+        }
+        setUserLocation(result.coord);
+        if (shouldMove()) setCamera({ center: result.coord, zoom: USER_ZOOM });
+      }),
     [setCamera, setUserLocation, showNotice],
   );
 

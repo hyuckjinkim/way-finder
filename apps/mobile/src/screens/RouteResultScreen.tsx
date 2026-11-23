@@ -55,6 +55,7 @@ import { deviceFromUA, handoffPlan, openHandoff, type HandoffApp } from '../rout
 import { SHARE_TOAST } from '../route/routeShare.js';
 import { canShare, sharePlace, type SharePayload } from '../share/share';
 import { Toast } from '../components/Toast';
+import { useHydrated } from '../components/useHydrated';
 
 const HANDOFF_LABEL: Record<HandoffApp, string> = { kakao: '카카오맵으로 안내', naver: '네이버지도로 안내' };
 
@@ -190,8 +191,7 @@ export function RouteResultScreen({
 }: RouteResultScreenProps): React.ReactElement {
   const win = useWindowDimensions();
   // 웹 정적 렌더(SSR)는 폭을 모르므로 마운트 후 실제 폭으로 여백을 정한다(OverlayPanel과 동일 이유).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   const isDesktop = mounted && panelPlacement(win.width) === 'side';
 
   // 선택은 경로 객체로 — 정렬·필터로 순서가 바뀌어도 유지, 걸러지거나 새 결과가 오면 첫 경로로.

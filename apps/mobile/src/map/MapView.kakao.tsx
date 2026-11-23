@@ -76,9 +76,11 @@ const MapViewKakaoNative = forwardRef<MapViewRef, MapViewProps>(
 
     // 외부 camera prop이 값으로 바뀌면 로컬 상태를 덮어쓴다(이전엔 오래된 명령형 상태가 이겨
     // camera prop 변경이 지도에 반영되지 않았다). fitTo는 뒤에 선언돼 같은 커밋에선 camera보다 우선.
+    const { lat, lng } = camera.center;
+    const { zoom } = camera;
     useEffect(() => {
-      setActiveCamera(camera);
-    }, [camera.center.lat, camera.center.lng, camera.zoom]);
+      setActiveCamera({ center: { lat, lng }, zoom });
+    }, [lat, lng, zoom]);
 
     const fitToKey = fitKey(fitTo);
     useEffect(() => {

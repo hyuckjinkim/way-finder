@@ -34,6 +34,7 @@ import { placeSubtitle } from '../search/format.js';
 import { ModeTabs } from '../route/ModeTabsBar.js';
 import { availableModes } from '../route/capabilities.js';
 import { loadLastMode, saveLastMode } from '../route/lastMode.js';
+import { useHydrated } from '../components/useHydrated.js';
 import type { RouteUrlState } from '../route/routeUrl.js';
 import type { WaypointEntry } from '../route/waypoints.js';
 import {
@@ -87,7 +88,11 @@ export function RouteInputScreen({
   const [origin, setOrigin] = useState<StopEntry | null>(initial?.origin ?? null);
   const [destination, setDestination] = useState<StopEntry | null>(initial?.destination ?? null);
   const [waypoints, setWaypoints] = useState<WaypointEntry[]>([]);
-  const [mode, setMode] = useState<ModeTabId>(initial?.mode ?? DEFAULT_MODE_TAB);
+  // 마지막 이동수단 복원 — SSR 하이드레이션 불일치를 피해 하이드레이션 뒤에만 읽는다(URL mode가 우선).
+  const hydrated = useHydrated();
+  const lastMode = useMemo(() => (hydrated && !initial?.mode ? loadLastMode() : undefined), [hydrated, initial?.mode]);
+  const [pickedMode, setMode] = useState<ModeTabId | null>(initial?.mode ?? null);
+  const mode = pickedMode ?? lastMode ?? DEFAULT_MODE_TAB;
 
   // 기본 출발지 = 내 위치. 사용자가 먼저 고른 출발지는 덮어쓰지 않는다.
   useEffect(() => {
@@ -101,13 +106,6 @@ export function RouteInputScreen({
     };
   }, [initial?.origin, locate]);
 
-  // 마지막 이동수단 복원 — SSR 하이드레이션 불일치를 피해 마운트 후 적용(URL mode가 우선).
-  useEffect(() => {
-    if (initial?.mode) return;
-    const last = loadLastMode();
-    if (last) setMode(last);
-  }, [initial?.mode]);
-
   const selectMode = useCallback((m: TravelMode) => {
     setMode(m);
     saveLastMode(m);
@@ -119,9 +117,8 @@ export function RouteInputScreen({
   );
   const region = stopCoords.length >= 2 ? routeRegion(stopCoords) : undefined;
   const modes = useMemo(() => availableModes(capabilities, region), [capabilities, region]);
-  useEffect(() => {
-    if (!modes.includes(mode)) setMode(modes[0]!);
-  }, [modes, mode]);
+  // 지원하지 않는 모드면 첫 모드로 — 렌더 중 조정(modes는 비지 않는다).
+  if (!modes.includes(mode)) setMode(modes[0]!);
   useEffect(() => {
     onModeChange?.(mode);
   }, [mode, onModeChange]);
@@ -188,7 +185,7 @@ export function RouteInputScreen({
       setSearchQuery('');
       runSearch('');
     },
-    [focusedField],
+    [focusedField, runSearch],
   );
 
   const handleAddWaypoint = useCallback(() => {
@@ -201,7 +198,7 @@ export function RouteInputScreen({
       setSearchQuery('');
       runSearch('');
     }
-  }, [waypoints]);
+  }, [waypoints, runSearch]);
 
   const handleRemoveWaypoint = useCallback((index: number) => {
     setWaypoints((prev) => removeWaypoint(prev, index));

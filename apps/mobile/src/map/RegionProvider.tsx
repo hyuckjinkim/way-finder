@@ -8,7 +8,7 @@
  * 렌더러 전환 시 카메라 상태는 props로 그대로 흐르므로(두 구현체가 동일 `CameraState`
  * 계약을 받음) 별도 이어받기 로직 없이 카메라가 이어진다. 이 모듈은 *선택*만 책임진다.
  */
-import { useRef } from 'react';
+import { useState } from 'react';
 import { selectRenderer } from '@wayfinder/shared/region';
 import type { RegionRenderer } from '@wayfinder/shared/region';
 import type { CameraState } from '@wayfinder/shared';
@@ -30,15 +30,15 @@ export function nextRenderer(
 /**
  * 카메라 상태로부터 현재 렌더러를 결정하는 훅.
  *
- * 직전 렌더러를 ref에 보관해 히스테리시스를 적용한다(상태 갱신이 아니라 ref라
- * 추가 렌더를 유발하지 않으며, 반환값 변화는 부모의 camera 변경으로 이미 리렌더됨).
+ * 직전 렌더러를 상태에 보관해 히스테리시스를 적용한다. 바뀔 때만 렌더 중에 갱신한다
+ * (React 문서의 「이전 값을 상태에 두고 렌더 중 비교」 — selectRenderer는 자기 결과를 다시 넣으면 같은 값).
  *
  * @param camera 현재 카메라 상태(center + zoom)
  * @returns 'korea' | 'global'
  */
 export function useRegionRenderer(camera: CameraState): RegionRenderer {
-  const previous = useRef<RegionRenderer | undefined>(undefined);
-  const next = nextRenderer(camera, previous.current);
-  previous.current = next;
+  const [previous, setPrevious] = useState<RegionRenderer | undefined>(undefined);
+  const next = nextRenderer(camera, previous);
+  if (next !== previous) setPrevious(next);
   return next;
 }

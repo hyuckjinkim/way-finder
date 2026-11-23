@@ -12,7 +12,7 @@
  *
  * 통합(E3): 라우트 배선·실제 데이터 연결은 스트림 E가 담당. 이 화면은 props/계약만 노출.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Platform, StyleSheet } from 'react-native';
 import * as Linking from 'expo-linking';
 import type { PlaceDetail, Rating, Review } from '@wayfinder/shared';
@@ -67,6 +67,10 @@ export function PlaceDetailSheet({
 }: PlaceDetailSheetProps): React.ReactElement {
   const tabs = visibleTabs(detail);
   const [active, setActive] = useState<PlatformTabId>(() => defaultActiveTab(detail));
+  // 활성 탭이 가시 탭에서 사라지면(외부 detail 교체 등) 기본 탭으로 복구 — 렌더 중 조정(기본 탭은 늘 가시 탭).
+  if (!tabs.includes(active)) {
+    setActive(defaultActiveTab(detail));
+  }
   const [googleState, setGoogleState] = useState<GoogleLoadState>('idle');
   const [googleData, setGoogleData] = useState<GoogleData>({ reviews: [] });
   const [copied, setCopied] = useState<boolean | null>(null);
@@ -97,13 +101,6 @@ export function PlaceDetailSheet({
         setGoogleState('error');
       });
   }, [googleState, loadGoogle, detail.rating, detail.reviews]);
-
-  // 활성 탭이 가시 탭에서 사라지면(외부 detail 교체 등) 기본 탭으로 복구.
-  useEffect(() => {
-    if (!tabs.includes(active)) {
-      setActive(defaultActiveTab(detail));
-    }
-  }, [tabs, active, detail]);
 
   const callPhone = (): void => {
     if (!phoneUrl) return;

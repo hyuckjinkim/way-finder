@@ -17,6 +17,7 @@ import { parseRouteParams, routeQuery } from '../../src/route/routeUrl';
 import { resolveRouteInput } from '../../src/route/routeInput';
 import { isSameStop } from '../../src/route/routeResultView';
 import { buildRouteShare } from '../../src/route/routeShare';
+import { useHydrated } from '../../src/components/useHydrated';
 
 const NO_STOPS: never[] = [];
 
@@ -98,8 +99,7 @@ export default function RouteResultRoute() {
   }, [navigation, onBack]);
 
   // 정적 렌더(SSR)는 쿼리 없이 그려져 직접 진입 시 하이드레이션 #418 — URL 기반 화면은 마운트 후에만.
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
   if (!mounted) return <View style={styles.blank} />;
 
   if (!input) {

@@ -9,9 +9,7 @@
  *
  * MapView 파일 수정 금지 (§8 D4 경계).
  */
-import type { MapPolyline } from '@wayfinder/shared';
-import type { Route, RouteLeg, TravelMode, TransitMeta } from '@wayfinder/shared';
-import type { BBox, LatLng } from '@wayfinder/shared';
+import type { BBox, LatLng, MapPolyline, Route, RouteLeg, TravelMode, TransitMeta } from '@wayfinder/shared';
 import { haversineDistanceM } from '@wayfinder/shared';
 
 /** 입력 지점과 경로 끝이 이보다 멀면 "같은 곳"이 아니다 — 도보 연결선·마커 판단 기준(m). */

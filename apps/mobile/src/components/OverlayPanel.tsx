@@ -7,7 +7,7 @@
  *   화면-32까지, 헤더의 화살표로 접는다.
  * 패널 밖(지도 영역) 터치는 아래 지도로 통과한다(box-none + 아래 웹 CSS).
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   PanResponder,
@@ -31,6 +31,7 @@ import {
   stepSnap,
   type SnapName,
 } from './sheetSnap';
+import { useHydrated } from './useHydrated';
 
 export { SIDE_PANEL_MIN_WIDTH, panelPlacement } from './sheetSnap';
 
@@ -82,11 +83,10 @@ function focusInto(el: HTMLElement | null): void {
 export function OverlayPanel({ children, initialSnap = 'full', title = '', hidden = false }: OverlayPanelProps): React.ReactElement {
   const { width, height } = useWindowDimensions();
   // 웹 정적 렌더(SSR)는 폭을 모른 채 그리고, 하이드레이션은 서버 스타일을 고치지 않는다.
-  // 마운트 후 한 번 더 렌더해 실제 폭을 반영한다.
-  const [mounted, setMounted] = useState(false);
+  // 하이드레이션 뒤 한 번 더 렌더해 실제 폭을 반영한다(useHydrated).
+  const mounted = useHydrated();
   useEffect(() => {
     installOverlayPassthrough();
-    setMounted(true);
   }, []);
   const placement = panelPlacement(width);
   const rootRef = useRef<View>(null);
@@ -165,11 +165,15 @@ function BottomSheet({
 }): React.ReactElement {
   const snaps = useMemo(() => snapHeights(windowHeight), [windowHeight]);
   const [minH, , maxH] = snaps;
-  const sheetH = useRef(new Animated.Value(Math.round(windowHeight * SNAP_FRACTIONS[initialSnap]))).current;
-  const current = useRef(Math.round(windowHeight * SNAP_FRACTIONS[initialSnap]));
-  const startH = useRef(current.current);
+  const initialH = Math.round(windowHeight * SNAP_FRACTIONS[initialSnap]);
+  const [sheetH] = useState(() => new Animated.Value(initialH));
+  const current = useRef(initialH);
+  const startH = useRef(initialH);
   const snapsRef = useRef(snaps);
-  snapsRef.current = snaps;
+  // 아래 [snaps] 효과(moveTo)보다 먼저 돈다 — 선언 순서.
+  useLayoutEffect(() => {
+    snapsRef.current = snaps;
+  }, [snaps]);
   const bodyRef = useRef<View>(null);
   const handleRef = useRef<View>(null);
 
@@ -193,6 +197,7 @@ function BottomSheet({
 
   const pan = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs -- PanResponder.create는 넘긴 핸들러를 렌더 중에 부르지 않는다 — 핸들러는 제스처 때만 ref를 읽는다. 린터가 이를 알 수 없다.
       PanResponder.create({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,

@@ -8,7 +8,7 @@
  *
  * P4 D1: RouteOptionsBar 슬롯 배선. B 스트림 완료 전 placeholder stub 사용.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import type { RoutePreference, RouteRequest, TravelMode } from '@wayfinder/shared';
 import { RouteInputScreen } from '../../src/screens/RouteInputScreen';
@@ -41,11 +41,11 @@ export default function RouteInputRoute() {
   const [selectedMode, setSelectedMode] = useState<TravelMode>('transit');
 
   // 장소 시트의 '/route/input?d=lat,lng,이름' 같은 링크로 프리필.
-  const initial = useMemo(() => {
+  // 최초 진입 값만 프리필(이후 params 변화는 무시).
+  const [initial] = useState(() => {
     const u = parseRouteParams(params);
     return { origin: u.origin, destination: u.destination, mode: u.mode };
-    // 최초 진입 값만 프리필(deps 의도적 비움)
-  }, []);
+  });
 
   const onSubmit = useCallback(
     (req: RouteRequest, urlState: RouteUrlState) => {

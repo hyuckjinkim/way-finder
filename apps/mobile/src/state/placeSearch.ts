@@ -5,7 +5,7 @@
  * (1) 응답 순서가 뒤바뀌어 늦게 온 중간 단어("강남ㅇ" → 0건)가 최종 결과를 덮고,
  * (2) 프록시 레이트리밋(60/분)·KV 쓰기 쿼터를 빠르게 소진한다. 둘 다 여기서 막는다.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LatLng, Place } from '@wayfinder/shared';
 
 export const SEARCH_DEBOUNCE_MS = 250;
@@ -70,7 +70,9 @@ export function usePlaceSearch(provider: Searcher, near?: LatLng): PlaceSearchSt
   const [state, setState] = useState<PlaceSearchState>({ results: [], status: 'idle' });
   const searcher = useRef<ReturnType<typeof createPlaceSearcher> | null>(null);
   const nearRef = useRef(near);
-  nearRef.current = near;
+  useLayoutEffect(() => {
+    nearRef.current = near;
+  }, [near]);
   useEffect(() => {
     searcher.current = createPlaceSearcher(provider, setState, SEARCH_DEBOUNCE_MS, () => nearRef.current);
     return () => searcher.current?.dispose();

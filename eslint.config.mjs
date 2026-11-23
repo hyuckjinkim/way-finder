@@ -22,12 +22,6 @@ export default defineConfig([
   {
     files: ['apps/mobile/**/*.{js,jsx,ts,tsx,mjs,cjs}'],
     extends: [expoConfig],
-    rules: {
-      // React Compiler 계열 규칙(react-hooks v7). 도입 때 기존 코드 22곳이 걸렸다 — 고치려면 화면 동작을
-      // 바꾸는 리팩터링이라 기기 확인과 함께 한다. 그때까지 경고로 둔다(.styleguide wayfinder §3).
-      'react-hooks/refs': 'warn',
-      'react-hooks/set-state-in-effect': 'warn',
-    },
   },
   {
     // vi.mock 을 import 보다 먼저 적는 테스트 관례(vitest 가 끌어올린다).
